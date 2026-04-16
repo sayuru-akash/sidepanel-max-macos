@@ -72,6 +72,14 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.should_release == 'true'
     runs-on: macos-14
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      PKG_SIGN_IDENTITY: ${{ secrets.PKG_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -83,10 +91,7 @@ jobs:
         run: chmod +x scripts/*.sh scripts/lib/*.sh .githooks/pre-commit
 
       - name: Import signing certificate
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        if: ${{ env.APPLE_CERTIFICATE_BASE64 != '' && env.APPLE_CERTIFICATE_PASSWORD != '' }}
         run: |
           set -euo pipefail
 
@@ -115,9 +120,6 @@ jobs:
           security default-keychain -s "$keychain_path"
 
       - name: Run production checks
-        env:
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-          PKG_SIGN_IDENTITY: ${{ secrets.PKG_SIGN_IDENTITY }}
         run: ./scripts/check.sh
 
       - name: Create release zip artifact
@@ -129,11 +131,8 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "dist/SidePanel.app" "dist/SidePanel-${VERSION}.zip"
 
       - name: Notarize installer package
-        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+        if: ${{ env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' }}
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: ./scripts/notarize_pkg.sh "dist/SidePanel-${VERSION}.pkg"
 
