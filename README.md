@@ -21,6 +21,28 @@ SidePanel is a native macOS floating browser panel built with SwiftUI, AppKit, a
 - macOS 14 or later
 - Xcode 15 or later if opening in Xcode
 
+## Versioning (Single Source Of Truth)
+
+Release version is controlled by one file:
+
+- `version.txt`
+
+Example:
+
+```text
+0.1.0
+```
+
+To bump version:
+
+```bash
+./scripts/bump_version.sh 0.1.1
+```
+
+Or edit `version.txt` directly.
+
+All packaging and release automation reads from that file.
+
 ## Build And Run
 
 ### Swift Package Manager
@@ -37,6 +59,108 @@ This launches a GUI process from the terminal, so the shell stays attached while
 1. Open `Package.swift` in Xcode.
 2. Select the `SidePanel` executable target.
 3. Build and run.
+
+## Production Build And Packaging
+
+Build a signed (ad-hoc by default) app bundle and `.pkg` installer:
+
+```bash
+./scripts/check.sh
+```
+
+Artifacts are created in `dist/`:
+
+- `dist/SidePanel.app`
+- `dist/SidePanel-<version>.pkg`
+
+To only build the app bundle:
+
+```bash
+./scripts/build_app_bundle.sh
+```
+
+To only build the installer package from an already built app bundle:
+
+```bash
+./scripts/build_pkg.sh --skip-app-build
+```
+
+For Developer ID signing and notarization, provide these environment variables:
+
+- `CODESIGN_IDENTITY`
+- `PKG_SIGN_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+Notarize a generated package manually:
+
+```bash
+./scripts/notarize_pkg.sh dist/SidePanel-$(cat version.txt).pkg
+```
+
+## App Icon
+
+A custom purple-focused icon can be generated and regenerated with:
+
+```bash
+./scripts/generate_icon.sh
+```
+
+It outputs:
+
+- `Assets/AppIcon/SidePanel-1024.png`
+- `Assets/AppIcon/SidePanel.icns`
+
+The installer build embeds this `.icns` file into `SidePanel.app`.
+
+## Pre-Commit Quality Gate
+
+Enable repository-managed git hooks:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+This wires `.githooks/pre-commit` so every commit runs:
+
+- unit tests
+- release build
+- app bundle build
+- `.pkg` build
+
+If any step fails, the commit is blocked.
+
+## GitHub Actions (CI + Auto Release)
+
+### CI
+
+- Workflow: `.github/workflows/ci.yml`
+- Runs on push and pull request
+- Executes `./scripts/check.sh`
+
+### Auto Release
+
+- Workflow: `.github/workflows/release.yml`
+- Runs on pushes to `main`/`master` and on manual dispatch
+- If `version.txt` changed and tag does not already exist:
+  - runs production checks
+  - builds `.app` and `.pkg`
+  - optionally notarizes package if Apple credentials are configured
+  - creates and pushes tag `v<version>`
+  - publishes GitHub Release with artifacts and SHA256 checksums
+
+Required repository secrets for signed/notarized releases:
+
+- `APPLE_CERTIFICATE_BASE64`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `CODESIGN_IDENTITY`
+- `PKG_SIGN_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+If signing secrets are omitted, the workflow still builds and publishes unsigned artifacts.
 
 ## Testing
 
@@ -58,13 +182,13 @@ SidePanel uses Accessibility permission for system-wide shortcuts.
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|---|---|
-| `Cmd+Shift+S` | Toggle sidebar |
-| `Cmd+Shift+N` | New tab |
+| Shortcut      | Action            |
+| ------------- | ----------------- |
+| `Cmd+Shift+S` | Toggle sidebar    |
+| `Cmd+Shift+N` | New tab           |
 | `Cmd+Shift+W` | Close current tab |
-| `Cmd+Shift+[` | Previous tab |
-| `Cmd+Shift+]` | Next tab |
+| `Cmd+Shift+[` | Previous tab      |
+| `Cmd+Shift+]` | Next tab          |
 | `Cmd+Shift+L` | Focus address bar |
 
 ## Toolbar

@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: macos-14
+    outputs:
+      should_release: ${{ steps.prepare.outputs.should_release }}
+      version: ${{ steps.prepare.outputs.version }}
+      tag: ${{ steps.prepare.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare release metadata
+        id: prepare
+        run: |
+          set -euo pipefail
+
+          chmod +x scripts/*.sh scripts/lib/*.sh
+
+          version="$(tr -d '[:space:]' < version.txt)"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version.txt value: $version" >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          should_release="false"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            should_release="true"
+          else
+            if git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
+              changed_files="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")"
+            else
+              changed_files="$(git show --pretty='' --name-only "${{ github.sha }}")"
+            fi
+
+            if grep -qx "version.txt" <<< "$changed_files"; then
+              should_release="true"
+            fi
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists. Skipping release creation."
+            should_release="false"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh scripts/lib/*.sh .githooks/pre-commit
+
+      - name: Import signing certificate
+        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          cert_path="$RUNNER_TEMP/cert.p12"
+          keychain_path="$RUNNER_TEMP/build.keychain-db"
+
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$cert_path"
+
+          security create-keychain -p "" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "" "$keychain_path"
+          security import "$cert_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "" \
+            "$keychain_path"
+
+          security list-keychains -d user -s "$keychain_path"
+          security default-keychain -s "$keychain_path"
+
+      - name: Run production checks
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          PKG_SIGN_IDENTITY: ${{ secrets.PKG_SIGN_IDENTITY }}
+        run: ./scripts/check.sh
+
+      - name: Create release zip artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          ditto -c -k --sequesterRsrc --keepParent "dist/SidePanel.app" "dist/SidePanel-${VERSION}.zip"
+
+      - name: Notarize installer package
+        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: ./scripts/notarize_pkg.sh "dist/SidePanel-${VERSION}.pkg"
+
+      - name: Create checksums and release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          shasum -a 256 "dist/SidePanel-${VERSION}.pkg" > dist/checksums.txt
+          shasum -a 256 "dist/SidePanel-${VERSION}.zip" >> dist/checksums.txt
+
+          {
+            echo "## SidePanel ${VERSION}"
+            echo
+            echo "Release generated automatically from version.txt bump."
+            echo
+            echo "### Artifacts"
+            echo "- SidePanel-${VERSION}.pkg"
+            echo "- SidePanel-${VERSION}.zip"
+            echo
+            echo "### SHA256"
+            echo '```text'
+            cat dist/checksums.txt
+            echo '```'
+          } > dist/RELEASE_NOTES.md
+
+      - name: Push release tag
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: SidePanel ${{ needs.prepare.outputs.version }}
+          body_path: dist/RELEASE_NOTES.md
+          files: |
+            dist/SidePanel-${{ needs.prepare.outputs.version }}.pkg
+            dist/SidePanel-${{ needs.prepare.outputs.version }}.zip
+            dist/checksums.txt
