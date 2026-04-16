@@ -71,6 +71,14 @@ struct SettingsView: View {
 
             Spacer()
 
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AppVersion.settingsLabel)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(AppVersion.settingsDetail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
             Button("Reset All Settings", role: .destructive) {
                 settingsManager.resetToDefaults()
             }
@@ -376,6 +384,7 @@ private struct SettingsToggleRow: View {
         HStack(alignment: .center, spacing: 16) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
+                .frame(width: 140, alignment: .leading)
             Spacer(minLength: 0)
             Toggle("", isOn: $isOn)
                 .labelsHidden()

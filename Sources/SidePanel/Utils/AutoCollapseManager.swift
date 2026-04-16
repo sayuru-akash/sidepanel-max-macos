@@ -78,6 +78,10 @@ final class AutoCollapseManager: ObservableObject {
         collapseDelay = seconds
     }
 
+    func reevaluateCurrentMouseLocation() {
+        handleMouseMove()
+    }
+
     // MARK: - Private
 
     private func handleMouseMove() {

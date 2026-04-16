@@ -12,6 +12,9 @@ VERSION="$(read_version)"
 echo "[check] Running production checks for version $VERSION"
 cd "$ROOT"
 
+echo "[check] sync version metadata"
+"$script_dir/sync_version_metadata.sh"
+
 echo "[check] swift test"
 swift test
 

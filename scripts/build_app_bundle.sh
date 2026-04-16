@@ -23,6 +23,8 @@ EXECUTABLE_PATH="$ROOT/.build/release/$EXECUTABLE_NAME"
 ICON_SOURCE="$ROOT/$ICON_SOURCE_PATH"
 ENTITLEMENTS_FILE="$ROOT/$ENTITLEMENTS_PATH"
 
+"$script_dir/sync_version_metadata.sh" >/dev/null
+
 skip_build=false
 for arg in "$@"; do
     case "$arg" in

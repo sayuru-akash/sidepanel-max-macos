@@ -148,7 +148,7 @@ final class PanelManager: ObservableObject {
                 let attachedOrigin = collapsedOrigin(for: frame)
                 lastCollapsedOrigin = attachedOrigin
                 collapsedWindow?.setFrameOrigin(attachedOrigin)
-                AutoCollapseManager.shared.cancelCollapse()
+                AutoCollapseManager.shared.reevaluateCurrentMouseLocation()
             }
         }
     }

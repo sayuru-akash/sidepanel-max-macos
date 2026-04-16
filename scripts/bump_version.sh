@@ -20,4 +20,5 @@ if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 printf '%s\n' "$NEW_VERSION" > "$ROOT/version.txt"
+"$script_dir/sync_version_metadata.sh"
 echo "version.txt updated to $NEW_VERSION"
