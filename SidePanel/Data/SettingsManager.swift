@@ -12,10 +12,6 @@ final class SettingsManager: ObservableObject {
 
     // MARK: - General
 
-    @Published var launchAtLogin: Bool {
-        didSet { defaults.set(launchAtLogin, forKey: "launchAtLogin") }
-    }
-
     @Published var rememberLastSession: Bool {
         didSet { defaults.set(rememberLastSession, forKey: "rememberLastSession") }
     }
@@ -67,10 +63,6 @@ final class SettingsManager: ObservableObject {
         didSet { defaults.set(clearHistoryOnQuit, forKey: "clearHistoryOnQuit") }
     }
 
-    @Published var doNotTrack: Bool {
-        didSet { defaults.set(doNotTrack, forKey: "doNotTrack") }
-    }
-
     // MARK: - Types
 
     enum Theme: String, CaseIterable, Identifiable {
@@ -83,7 +75,6 @@ final class SettingsManager: ObservableObject {
     private init() {
         // Register defaults
         let defaultValues: [String: Any] = [
-            "launchAtLogin": false,
             "rememberLastSession": true,
             "defaultSearchEngine": "google",
             "homepage": "https://google.com",
@@ -92,13 +83,11 @@ final class SettingsManager: ObservableObject {
             "transparency": 0.85,
             "autoCollapseDelay": 2.0,
             "showOnAllSpaces": true,
-            "clearHistoryOnQuit": false,
-            "doNotTrack": true
+            "clearHistoryOnQuit": false
         ]
         defaults.register(defaults: defaultValues)
 
         // Load
-        self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.rememberLastSession = defaults.bool(forKey: "rememberLastSession")
         self.defaultSearchEngine = defaults.string(forKey: "defaultSearchEngine") ?? "google"
         self.homepage = Self.normalizedHomepageValue(defaults.string(forKey: "homepage") ?? "https://google.com")
@@ -108,7 +97,6 @@ final class SettingsManager: ObservableObject {
         self.autoCollapseDelay = defaults.double(forKey: "autoCollapseDelay")
         self.showOnAllSpaces = defaults.bool(forKey: "showOnAllSpaces")
         self.clearHistoryOnQuit = defaults.bool(forKey: "clearHistoryOnQuit")
-        self.doNotTrack = defaults.bool(forKey: "doNotTrack")
 
         applyTheme()
     }
@@ -120,7 +108,6 @@ final class SettingsManager: ObservableObject {
         defaults.synchronize()
 
         // Re-init published properties
-        launchAtLogin = false
         rememberLastSession = true
         defaultSearchEngine = "google"
         homepage = "https://google.com"
@@ -130,10 +117,9 @@ final class SettingsManager: ObservableObject {
         autoCollapseDelay = 2.0
         showOnAllSpaces = true
         clearHistoryOnQuit = false
-        doNotTrack = true
     }
 
-    private static func normalizedHomepageValue(_ rawValue: String) -> String {
+    static func normalizedHomepageValue(_ rawValue: String) -> String {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "https://google.com" }
         if let url = URL(string: trimmed), url.scheme != nil {

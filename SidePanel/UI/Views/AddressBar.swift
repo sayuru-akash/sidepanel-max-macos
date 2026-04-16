@@ -93,6 +93,11 @@ struct AddressBar: View {
                 .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
             }
         }
+        .onAppear {
+            if let url = tabManager.activeTab?.url, !isFocused {
+                urlText = url
+            }
+        }
         .onChange(of: tabManager.activeTab?.url) { _, newValue in
             if !isFocused, let url = newValue {
                 urlText = url

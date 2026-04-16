@@ -38,6 +38,14 @@ This launches a GUI process from the terminal, so the shell stays attached while
 2. Select the `SidePanel` executable target.
 3. Build and run.
 
+## Testing
+
+```bash
+swift test
+```
+
+The current package includes unit tests for homepage normalization logic.
+
 ## First Launch
 
 SidePanel uses Accessibility permission for system-wide shortcuts.

@@ -156,6 +156,11 @@ final class TabManager: ObservableObject {
         createTab(url: URL(string: tab.url))
     }
 
+    func setPinned(_ isPinned: Bool, for tab: Tab) {
+        tab.isPinned = isPinned
+        SessionManager.shared.scheduleSnapshotSave()
+    }
+
     // MARK: - Reordering
 
     func reorderTabs(from source: IndexSet, to destination: Int) {

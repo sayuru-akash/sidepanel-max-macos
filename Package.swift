@@ -7,6 +7,9 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    products: [
+        .executable(name: "SidePanel", targets: ["SidePanel"])
+    ],
     targets: [
         .executableTarget(
             name: "SidePanel",
@@ -15,6 +18,11 @@ let package = Package(
                 "App/Info.plist",
                 "SidePanel.entitlements"
             ]
+        ),
+        .testTarget(
+            name: "SidePanelTests",
+            dependencies: ["SidePanel"],
+            path: "Tests/SidePanelTests"
         )
     ]
 )

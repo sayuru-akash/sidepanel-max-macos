@@ -63,7 +63,7 @@ struct TabButton: View {
             Button("Duplicate Tab") { tabManager.duplicateTab(tab) }
             Divider()
             Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") {
-                tab.isPinned.toggle()
+                tabManager.setPinned(!tab.isPinned, for: tab)
             }
         }
     }
