@@ -13,7 +13,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "SidePanel",
-            path: "SidePanel",
+            path: "Sources/SidePanel",
             exclude: [
                 "App/Info.plist",
                 "SidePanel.entitlements"

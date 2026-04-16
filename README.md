@@ -115,27 +115,32 @@ Browsing history is not a settings tab. It is available from the toolbar history
 The current codebase is organized like this:
 
 ```text
-SidePanel/
-  App/
-  Data/
-  Tabs/
-  UI/
-    Components/
-    Settings/
-    Views/
-  Utils/
-  Web/
-  Window/
+Sources/
+  SidePanel/
+    App/
+    Data/
+    Tabs/
+    UI/
+      Components/
+      Settings/
+      Views/
+    Utils/
+    Web/
+    Window/
+
+Tests/
+  SidePanelTests/
 ```
 
 Main pieces:
 
-- `App/` app lifecycle and startup coordination
-- `Window/` floating panel and collapsed bubble window management
-- `Tabs/` tab state, restored navigation history, and tab-level navigation
-- `Web/` `WKWebView` integration and adaptive page fitting
-- `Data/` settings, session persistence, and browsing history persistence
-- `UI/` SwiftUI views for toolbar, tabs, settings, address bar, and history
+- `Sources/SidePanel/App/` app lifecycle and startup coordination
+- `Sources/SidePanel/Window/` floating panel and collapsed bubble window management
+- `Sources/SidePanel/Tabs/` tab state, restored navigation history, and tab-level navigation
+- `Sources/SidePanel/Web/` `WKWebView` integration and adaptive page fitting
+- `Sources/SidePanel/Data/` settings, session persistence, and browsing history persistence
+- `Sources/SidePanel/UI/` SwiftUI views for toolbar, tabs, settings, address bar, and history
+- `Tests/SidePanelTests/` unit tests for pure logic
 
 ## Notes
 
