@@ -50,9 +50,9 @@ final class FloatingPanel: NSPanel {
         collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
-            .ignoresCycle,
-            .moveToActiveSpace
+            .ignoresCycle
         ]
+        acceptsMouseMovedEvents = true
         isMovableByWindowBackground = true
         animationBehavior = .utilityWindow
 

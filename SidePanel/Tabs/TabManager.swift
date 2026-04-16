@@ -8,6 +8,7 @@ import Combine
 final class TabManager: ObservableObject {
 
     static let shared = TabManager()
+    private let defaultHomeURL = URL(string: "https://google.com")!
 
     // MARK: - Published State
 
@@ -41,7 +42,7 @@ final class TabManager: ObservableObject {
         }
 
         let tab = Tab(
-            url: url?.absoluteString ?? "about:blank",
+            url: url?.absoluteString ?? defaultHomeURL.absoluteString,
             title: "New Tab",
             order: tabs.count
         )
@@ -174,27 +175,7 @@ final class TabManager: ObservableObject {
     }
 
     private func loadDefaultPage(in webView: WKWebView) {
-        let html = """
-        <html>
-        <head>
-        <style>
-            body {
-                background: #1a1a1a;
-                color: #888;
-                font-family: -apple-system, system-ui;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100vh;
-                margin: 0;
-            }
-            h1 { font-weight: 300; font-size: 24px; }
-        </style>
-        </head>
-        <body><h1>SidePanel</h1></body>
-        </html>
-        """
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.load(URLRequest(url: defaultHomeURL))
     }
 
     /// Turns user input into a URL -- either directly or via search.

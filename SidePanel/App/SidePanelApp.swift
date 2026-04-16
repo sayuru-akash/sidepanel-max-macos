@@ -8,6 +8,12 @@ import SwiftData
 struct SidePanelApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        DispatchQueue.main.async {
+            AppRuntimeController.shared.startIfNeeded()
+        }
+    }
+
     /// Wire the SwiftData ModelContainer so Tab objects are managed
     /// by a real ModelContext and auto-save actually persists data.
     var sharedModelContainer: ModelContainer {
@@ -18,7 +24,7 @@ struct SidePanelApp: App {
         // Settings window – opened via the menu bar or gear button
         Settings {
             SettingsView()
-                .environmentObject(appDelegate.settingsManager)
+                .environmentObject(SettingsManager.shared)
         }
         .modelContainer(sharedModelContainer)
     }

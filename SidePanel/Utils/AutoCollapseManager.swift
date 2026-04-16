@@ -13,6 +13,11 @@ final class AutoCollapseManager: ObservableObject {
     private var collapseTimer: Timer?
     private var collapseDelay: TimeInterval = 2.0
     private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private var pendingDelay: TimeInterval?
+
+    private let iconTransitionDelay: TimeInterval = 0.18
+    private let temporaryPanelExitDelayCap: TimeInterval = 0.35
 
     private init() {}
 
@@ -21,10 +26,19 @@ final class AutoCollapseManager: ObservableObject {
     func startMonitoring() {
         stopMonitoring()
 
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+        let eventMask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventMask) { [weak self] _ in
             Task { @MainActor in
                 self?.handleMouseMove()
             }
+        }
+
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
+            Task { @MainActor in
+                self?.handleMouseMove()
+            }
+            return event
         }
     }
 
@@ -33,22 +47,31 @@ final class AutoCollapseManager: ObservableObject {
             NSEvent.removeMonitor(monitor)
             globalMonitor = nil
         }
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
+        }
         cancelCollapse()
     }
 
-    /// Called when the user hovers the collapsed icon -- begins temporary expansion.
     func scheduleCollapse() {
-        cancelCollapse()
-        collapseTimer = Timer.scheduledTimer(withTimeInterval: collapseDelay, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                self?.collapseIfNeeded()
-            }
-        }
+        scheduleCollapse(after: collapseDelay)
+    }
+
+    /// Small grace period so moving from the icon into the expanded panel does not flicker closed.
+    func scheduleIconTransitionCollapse() {
+        scheduleCollapse(after: iconTransitionDelay)
+    }
+
+    /// Keep temporary hover-open behavior responsive even if the general preference is larger.
+    func scheduleTemporaryPanelExitCollapse() {
+        scheduleCollapse(after: min(collapseDelay, temporaryPanelExitDelayCap))
     }
 
     func cancelCollapse() {
         collapseTimer?.invalidate()
         collapseTimer = nil
+        pendingDelay = nil
     }
 
     func updateDelay(_ seconds: TimeInterval) {
@@ -69,7 +92,21 @@ final class AutoCollapseManager: ObservableObject {
            panelFrame.contains(mouseLocation) {
             cancelCollapse()
         } else {
-            scheduleCollapse()
+            scheduleTemporaryPanelExitCollapse()
+        }
+    }
+
+    private func scheduleCollapse(after delay: TimeInterval) {
+        if let pendingDelay, abs(pendingDelay - delay) < 0.001, collapseTimer != nil {
+            return
+        }
+
+        cancelCollapse()
+        pendingDelay = delay
+        collapseTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.collapseIfNeeded()
+            }
         }
     }
 

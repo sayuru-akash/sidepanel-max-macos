@@ -57,6 +57,8 @@ final class PanelManager: ObservableObject {
 
     /// Creates the floating panel (if needed) and makes it visible.
     func showPanel() {
+        AutoCollapseManager.shared.stopMonitoring()
+
         if panel == nil {
             let floatingPanel = FloatingPanel()
 
@@ -148,6 +150,8 @@ final class PanelManager: ObservableObject {
 
     /// Hides the sidebar and shows the collapsed icon instead.
     func collapse() {
+        AutoCollapseManager.shared.stopMonitoring()
+
         // Remember where the panel was
         if let frame = panel?.frame {
             lastPanelFrame = frame
@@ -161,15 +165,18 @@ final class PanelManager: ObservableObject {
     /// Temporarily shows the sidebar (used on hover).
     func temporarilyExpand() {
         guard state == .unpinned else { return }
+        AutoCollapseManager.shared.cancelCollapse()
         collapsedWindow?.orderOut(nil)
         panel?.makeKeyAndOrderFront(nil)
         panelFrame = panel?.frame ?? .zero
         state = .temporarilyExpanded
+        AutoCollapseManager.shared.startMonitoring()
     }
 
     /// Collapses back from a temporary expansion.
     func collapseFromTemporary() {
         guard state == .temporarilyExpanded else { return }
+        AutoCollapseManager.shared.stopMonitoring()
         panel?.orderOut(nil)
         showCollapsedButton()
         state = .unpinned
@@ -211,7 +218,7 @@ final class PanelManager: ObservableObject {
                     self?.temporarilyExpand()
                 },
                 onHoverExit: {
-                    AutoCollapseManager.shared.scheduleCollapse()
+                    AutoCollapseManager.shared.scheduleIconTransitionCollapse()
                 }
             )
             .environmentObject(TabManager.shared)

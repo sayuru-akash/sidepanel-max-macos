@@ -40,14 +40,14 @@ final class CollapsedButtonWindow: NSPanel {
     private func configure() {
         backgroundColor = .clear
         isOpaque = false
-        hasShadow = true
+        hasShadow = false
         level = .floating
         collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
-            .ignoresCycle,
-            .moveToActiveSpace
+            .ignoresCycle
         ]
+        acceptsMouseMovedEvents = true
         isMovableByWindowBackground = true
         animationBehavior = .utilityWindow
     }

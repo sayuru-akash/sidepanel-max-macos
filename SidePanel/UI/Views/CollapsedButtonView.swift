@@ -35,6 +35,7 @@ struct CollapsedButtonView: View {
         }
         .buttonStyle(.plain)
         .frame(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
+        .contentShape(Circle())
         .onHover { hovering in
             withAnimation(AnimationConfig.hoverExpand) {
                 isHovering = hovering

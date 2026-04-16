@@ -35,18 +35,21 @@ SidePanel is a lightweight, always-on-top browser panel that floats over all you
 ### Option 2: Swift Package Manager
 
 ```bash
-cd SidePanel
+cd sidepanel-max-macos
 swift build
+./.build/debug/SidePanel
 ```
+
+The executable is a GUI process, so the terminal stays attached while the app is running. Use `Ctrl+C` in that terminal to stop it.
 
 ## First Launch
 
-On first launch, SidePanel will ask for **Accessibility** permission:
+On first launch, macOS should ask for **Accessibility** permission:
 
-1. Click "Open System Settings"
-2. Go to Privacy & Security > Accessibility
-3. Find SidePanel and toggle it on
-4. Relaunch the app
+1. Approve the system prompt if it appears
+2. Or open System Settings > Privacy & Security > Accessibility
+3. Find `SidePanel` and toggle it on
+4. Relaunch the app if needed
 
 This permission is needed for global keyboard shortcuts to work from any application.
 

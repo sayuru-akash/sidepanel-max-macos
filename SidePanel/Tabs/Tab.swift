@@ -37,7 +37,7 @@ final class Tab {
     // MARK: - Init
 
     init(
-        url: String = "about:blank",
+        url: String = "https://google.com",
         title: String = "New Tab",
         order: Int = 0
     ) {

@@ -11,28 +11,10 @@ enum PermissionManager {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    /// Shows an explanation alert and opens System Preferences if the user agrees.
+    /// Triggers the system prompt without blocking app startup.
     static func requestAccessibilityPermission() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let granted = AXIsProcessTrustedWithOptions(options)
-        guard !granted else { return }
-
-        NSApp.activate(ignoringOtherApps: true)
-
-        let response = NSAlert(
-            messageText: "Accessibility Permission Required",
-            informativeText: """
-            SidePanel needs Accessibility access for global keyboard shortcuts.
-
-            macOS should also show the system permission prompt. If it does not, open:
-            System Settings > Privacy & Security > Accessibility
-            """,
-            buttons: ["Open System Settings", "Later"]
-        ).runModal()
-
-        if response == .alertFirstButtonReturn {
-            openAccessibilityPreferences()
-        }
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 
     // MARK: - Private
@@ -41,15 +23,5 @@ enum PermissionManager {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-    }
-}
-
-private extension NSAlert {
-    convenience init(messageText: String, informativeText: String, buttons: [String]) {
-        self.init()
-        self.messageText = messageText
-        self.informativeText = informativeText
-        self.alertStyle = .informational
-        buttons.forEach { addButton(withTitle: $0) }
     }
 }
