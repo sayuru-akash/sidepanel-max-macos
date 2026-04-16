@@ -9,6 +9,8 @@ final class Tab {
     var url: String
     var title: String
     var faviconURLString: String?
+    var historyEntries: [String]?
+    var historyIndex: Int?
     var createdAt: Date
     var lastAccessedAt: Date
     var order: Int
@@ -41,9 +43,12 @@ final class Tab {
         title: String = "New Tab",
         order: Int = 0
     ) {
+        let initialURL = url.isEmpty ? "https://google.com" : url
         self.id = UUID()
-        self.url = url
+        self.url = initialURL
         self.title = title
+        self.historyEntries = [initialURL]
+        self.historyIndex = 0
         self.createdAt = Date()
         self.lastAccessedAt = Date()
         self.order = order

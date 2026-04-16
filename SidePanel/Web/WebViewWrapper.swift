@@ -10,6 +10,7 @@ struct WebViewWrapper: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = tab.webView ?? WKWebView(frame: .zero, configuration: WebViewConfigurationFactory.shared)
+        webView.autoresizingMask = [.width, .height]
 
         // Wire up coordinator
         let coordinator = context.coordinator
@@ -32,6 +33,7 @@ struct WebViewWrapper: NSViewRepresentable {
         // If the tab's webView changed (e.g., after session restore), swap it.
         // In practice the view identity is tied to the tab, so this is a no-op
         // most of the time.
+        context.coordinator.scheduleAdaptiveFit(for: nsView)
     }
 
     func makeCoordinator() -> WebViewCoordinator {

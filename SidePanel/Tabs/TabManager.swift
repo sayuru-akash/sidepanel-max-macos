@@ -8,7 +8,8 @@ import Combine
 final class TabManager: ObservableObject {
 
     static let shared = TabManager()
-    private let defaultHomeURL = URL(string: "https://google.com")!
+    static let defaultHomeURL = URL(string: "https://google.com")!
+    static let defaultHomeURLString = defaultHomeURL.absoluteString
 
     // MARK: - Published State
 
@@ -24,6 +25,7 @@ final class TabManager: ObservableObject {
     // MARK: - Limits
 
     private let maxTabs = 50
+    private var pendingHistoryIndexByTabID: [UUID: Int] = [:]
 
     // MARK: - Active Tab Helper
 
@@ -42,7 +44,7 @@ final class TabManager: ObservableObject {
         }
 
         let tab = Tab(
-            url: url?.absoluteString ?? defaultHomeURL.absoluteString,
+            url: normalizedURLString(url?.absoluteString),
             title: "New Tab",
             order: tabs.count
         )
@@ -86,6 +88,7 @@ final class TabManager: ObservableObject {
         // Tear down the web view.
         tab.webView?.stopLoading()
         tab.webView = nil
+        pendingHistoryIndexByTabID.removeValue(forKey: tab.id)
         modelContext?.delete(tab)
 
         reindex()
@@ -96,6 +99,7 @@ final class TabManager: ObservableObject {
         for tab in toClose {
             tab.webView?.stopLoading()
             tab.webView = nil
+            pendingHistoryIndexByTabID.removeValue(forKey: tab.id)
             modelContext?.delete(tab)
         }
         if exceptPinned {
@@ -115,8 +119,9 @@ final class TabManager: ObservableObject {
         if tab.webView == nil {
             let webView = createWebView(for: tab)
             tab.webView = webView
-            if let url = URL(string: tab.url) {
+            if let url = URL(string: normalizedURLString(tab.url)) {
                 webView.load(URLRequest(url: url))
+                tab.url = url.absoluteString
             }
         }
     }
@@ -141,14 +146,34 @@ final class TabManager: ObservableObject {
         }
 
         let url = resolveURL(from: urlString)
+        pendingHistoryIndexByTabID.removeValue(forKey: tab.id)
         tab.url = url.absoluteString
         tab.webView?.load(URLRequest(url: url))
     }
 
-    func goBack() { activeTab?.webView?.goBack() }
-    func goForward() { activeTab?.webView?.goForward() }
+    func goBack() {
+        guard let tab = activeTab, canGoBack(tab) else { return }
+        navigateHistory(for: tab, direction: -1)
+    }
+
+    func goForward() {
+        guard let tab = activeTab, canGoForward(tab) else { return }
+        navigateHistory(for: tab, direction: 1)
+    }
+
     func reload() { activeTab?.webView?.reload() }
     func stopLoading() { activeTab?.webView?.stopLoading() }
+
+    func canGoBack(_ tab: Tab?) -> Bool {
+        guard let tab else { return false }
+        return (tab.webView?.canGoBack ?? false) || historyIndex(for: tab) > 0
+    }
+
+    func canGoForward(_ tab: Tab?) -> Bool {
+        guard let tab else { return false }
+        let entries = historyEntries(for: tab)
+        return (tab.webView?.canGoForward ?? false) || historyIndex(for: tab, entries: entries) < entries.count - 1
+    }
 
     // MARK: - Tab Switching
 
@@ -175,7 +200,39 @@ final class TabManager: ObservableObject {
     }
 
     private func loadDefaultPage(in webView: WKWebView) {
-        webView.load(URLRequest(url: defaultHomeURL))
+        webView.load(URLRequest(url: Self.defaultHomeURL))
+    }
+
+    func recordCompletedNavigation(for tab: Tab, to rawURL: URL) {
+        let urlString = normalizedURLString(rawURL.absoluteString)
+        let entries = historyEntries(for: tab)
+        let currentIndex = historyIndex(for: tab, entries: entries)
+
+        if let pendingIndex = pendingHistoryIndexByTabID.removeValue(forKey: tab.id) {
+            if entries.indices.contains(pendingIndex) {
+                var updatedEntries = entries
+                updatedEntries[pendingIndex] = urlString
+                setHistory(updatedEntries, index: pendingIndex, for: tab)
+            } else {
+                appendHistoryEntry(urlString, to: tab)
+            }
+        } else if entries.indices.contains(currentIndex),
+                  entries[currentIndex] == urlString {
+            // Same-page reload or refresh.
+        } else {
+            appendHistoryEntry(urlString, to: tab)
+        }
+
+        tab.url = urlString
+        objectWillChange.send()
+    }
+
+    private func normalizedURLString(_ rawValue: String?) -> String {
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty || trimmed == "about:blank" {
+            return Self.defaultHomeURLString
+        }
+        return trimmed
     }
 
     /// Turns user input into a URL -- either directly or via search.
@@ -216,6 +273,71 @@ final class TabManager: ObservableObject {
         if let oldest = unpinned.min(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
             closeTab(oldest)
         }
+    }
+
+    private func appendHistoryEntry(_ urlString: String, to tab: Tab) {
+        var entries = historyEntries(for: tab)
+        let currentIndex = historyIndex(for: tab, entries: entries)
+
+        if currentIndex < entries.count - 1 {
+            entries.removeSubrange((currentIndex + 1)..<entries.count)
+        }
+
+        if entries.last != urlString {
+            entries.append(urlString)
+        } else if entries.isEmpty {
+            entries = [urlString]
+        }
+
+        setHistory(entries, index: max(0, entries.count - 1), for: tab)
+    }
+
+    private func navigateHistory(for tab: Tab, direction: Int) {
+        let entries = historyEntries(for: tab)
+        let targetIndex = historyIndex(for: tab, entries: entries) + direction
+        guard entries.indices.contains(targetIndex) else { return }
+
+        pendingHistoryIndexByTabID[tab.id] = targetIndex
+
+        if direction < 0, let webView = tab.webView, webView.canGoBack {
+            webView.goBack()
+            return
+        }
+
+        if direction > 0, let webView = tab.webView, webView.canGoForward {
+            webView.goForward()
+            return
+        }
+
+        guard let url = URL(string: entries[targetIndex]) else {
+            pendingHistoryIndexByTabID.removeValue(forKey: tab.id)
+            return
+        }
+
+        tab.webView?.load(URLRequest(url: url))
+    }
+
+    private func historyEntries(for tab: Tab) -> [String] {
+        let entries = (tab.historyEntries ?? []).map(normalizedURLString).filter { !$0.isEmpty }
+        if entries.isEmpty {
+            return [normalizedURLString(tab.url)]
+        }
+        return entries
+    }
+
+    private func historyIndex(for tab: Tab, entries: [String]? = nil) -> Int {
+        let entries = entries ?? historyEntries(for: tab)
+        guard !entries.isEmpty else { return 0 }
+        let rawIndex = tab.historyIndex ?? max(0, entries.count - 1)
+        return min(max(rawIndex, 0), entries.count - 1)
+    }
+
+    private func setHistory(_ entries: [String], index: Int, for tab: Tab) {
+        let normalizedEntries = entries.isEmpty ? [normalizedURLString(tab.url)] : entries
+        let normalizedIndex = min(max(index, 0), normalizedEntries.count - 1)
+        tab.historyEntries = normalizedEntries
+        tab.historyIndex = normalizedIndex
+        tab.url = normalizedEntries[normalizedIndex]
     }
 
     private func reindex() {

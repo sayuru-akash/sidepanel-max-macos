@@ -7,12 +7,18 @@ struct ToolbarView: View {
     @State private var showSettings = false
 
     var body: some View {
+        let activeTab = tabManager.activeTab
+
         HStack(spacing: 12) {
             // Navigation controls
             HStack(spacing: 4) {
                 navButton(icon: "chevron.left", action: { tabManager.goBack() })
+                    .disabled(!tabManager.canGoBack(activeTab))
+                    .opacity(tabManager.canGoBack(activeTab) ? 1 : 0.45)
                     .help("Back")
                 navButton(icon: "chevron.right", action: { tabManager.goForward() })
+                    .disabled(!tabManager.canGoForward(activeTab))
+                    .opacity(tabManager.canGoForward(activeTab) ? 1 : 0.45)
                     .help("Forward")
             }
 

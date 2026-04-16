@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import QuartzCore
 
 // MARK: - Panel State
 
@@ -50,6 +51,8 @@ final class PanelManager: ObservableObject {
     private var lastCollapsedOrigin: NSPoint?
 
     private var frameObservers: [NSObjectProtocol] = []
+    private let hoverTransitionDuration: TimeInterval = 0.14
+    private let hoverSlideOffset: CGFloat = 18
 
     private init() {}
 
@@ -88,10 +91,9 @@ final class PanelManager: ObservableObject {
             observePanelFrame(floatingPanel)
         }
 
-        panel?.orderFrontRegardless()
-        panel?.makeKey()
+        animateWindowIn(panel, makeKey: true)
+        animateWindowOut(collapsedWindow)
         panelFrame = panel?.frame ?? .zero
-        collapsedWindow?.orderOut(nil)
         state = .pinned
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -157,8 +159,9 @@ final class PanelManager: ObservableObject {
             lastPanelFrame = frame
         }
 
-        panel?.orderOut(nil)
         showCollapsedButton()
+        animateWindowOut(panel)
+        animateWindowIn(collapsedWindow)
         state = .unpinned
     }
 
@@ -166,8 +169,7 @@ final class PanelManager: ObservableObject {
     func temporarilyExpand() {
         guard state == .unpinned else { return }
         AutoCollapseManager.shared.cancelCollapse()
-        collapsedWindow?.orderOut(nil)
-        panel?.makeKeyAndOrderFront(nil)
+        animateTemporaryExpand()
         panelFrame = panel?.frame ?? .zero
         state = .temporarilyExpanded
         AutoCollapseManager.shared.startMonitoring()
@@ -177,8 +179,8 @@ final class PanelManager: ObservableObject {
     func collapseFromTemporary() {
         guard state == .temporarilyExpanded else { return }
         AutoCollapseManager.shared.stopMonitoring()
-        panel?.orderOut(nil)
         showCollapsedButton()
+        animateTemporaryCollapse()
         state = .unpinned
     }
 
@@ -229,8 +231,92 @@ final class PanelManager: ObservableObject {
             self.collapsedWindow = window
             self.collapsedHostingController = hosting
         }
+    }
 
-        collapsedWindow?.orderFrontRegardless()
+    private func animateWindowIn(_ window: NSWindow?, makeKey: Bool = false) {
+        guard let window else { return }
+
+        window.alphaValue = 0
+        window.orderFrontRegardless()
+        if makeKey {
+            window.makeKey()
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = hoverTransitionDuration
+            window.animator().alphaValue = 1
+        }
+    }
+
+    private func animateWindowOut(_ window: NSWindow?) {
+        guard let window, window.isVisible else { return }
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = hoverTransitionDuration
+            window.animator().alphaValue = 0
+        }, completionHandler: {
+            window.orderOut(nil)
+            window.alphaValue = 1
+        })
+    }
+
+    private func animateTemporaryExpand() {
+        guard let panel else { return }
+
+        let targetFrame = panel.frame
+        let startFrame = targetFrame.offsetBy(dx: hoverSlideOffset, dy: 0)
+
+        panel.setFrame(startFrame, display: false)
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        panel.makeKey()
+
+        if let collapsedWindow, collapsedWindow.isVisible {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = hoverTransitionDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                collapsedWindow.animator().alphaValue = 0
+            } completionHandler: {
+                collapsedWindow.orderOut(nil)
+                collapsedWindow.alphaValue = 1
+            }
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = hoverTransitionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(targetFrame, display: true)
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    private func animateTemporaryCollapse() {
+        guard let panel else { return }
+
+        let stableFrame = panel.frame
+        let endFrame = stableFrame.offsetBy(dx: hoverSlideOffset, dy: 0)
+
+        if let collapsedWindow {
+            collapsedWindow.alphaValue = 0
+            collapsedWindow.orderFrontRegardless()
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = hoverTransitionDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                collapsedWindow.animator().alphaValue = 1
+            }
+        }
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = hoverTransitionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().setFrame(endFrame, display: true)
+            panel.animator().alphaValue = 0
+        }, completionHandler: {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            panel.setFrame(stableFrame, display: false)
+        })
     }
 
     // MARK: - Persistence Helpers

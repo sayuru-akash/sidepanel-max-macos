@@ -34,11 +34,15 @@ final class SessionManager {
     private func saveTabs() {
         let tabManager = TabManager.shared
         let tabData: [[String: Any]] = tabManager.tabs.map { tab in
-            [
+            let historyEntries = tab.historyEntries ?? [tab.url]
+            let historyIndex = tab.historyIndex ?? max(0, historyEntries.count - 1)
+            return [
                 "id": tab.id.uuidString,
                 "url": tab.url,
                 "title": tab.title,
                 "faviconURL": tab.faviconURLString ?? "",
+                "historyEntries": historyEntries,
+                "historyIndex": historyIndex,
                 "order": tab.order,
                 "isPinned": tab.isPinned
             ]
@@ -56,13 +60,19 @@ final class SessionManager {
         tabManager.closeAllTabs(exceptPinned: false)
 
         for data in tabData {
-            guard let urlString = data["url"] as? String,
-                  let url = URL(string: urlString) else { continue }
+            guard let savedURLString = data["url"] as? String else { continue }
+            let urlString = savedURLString == "about:blank" ? TabManager.defaultHomeURLString : savedURLString
+            guard let url = URL(string: urlString) else { continue }
 
             let tab = tabManager.createTab(url: url, activate: false)
+            tab.url = urlString
             tab.title = data["title"] as? String ?? "Untitled"
             tab.isPinned = data["isPinned"] as? Bool ?? false
             tab.order = data["order"] as? Int ?? 0
+            let restoredHistoryEntries = data["historyEntries"] as? [String] ?? [urlString]
+            let savedHistoryIndex = data["historyIndex"] as? Int ?? max(0, restoredHistoryEntries.count - 1)
+            tab.historyEntries = restoredHistoryEntries
+            tab.historyIndex = min(max(savedHistoryIndex, 0), max(0, restoredHistoryEntries.count - 1))
 
             if let favicon = data["faviconURL"] as? String, !favicon.isEmpty {
                 tab.faviconURLString = favicon
