@@ -12,7 +12,6 @@ let package = Package(
             name: "SidePanel",
             path: "SidePanel",
             resources: [
-                .process("Resources"),
                 .copy("App/Info.plist")
             ]
         )

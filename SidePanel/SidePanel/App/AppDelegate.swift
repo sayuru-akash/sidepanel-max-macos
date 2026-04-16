@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide dock icon (belt-and-suspenders; also set via LSUIElement)
         NSApp.setActivationPolicy(.accessory)
 
+        // Wire SwiftData ModelContext into TabManager so Tab inserts/deletes persist
+        TabManager.shared.modelContext = PersistenceController.shared.container.mainContext
+
         // Restore previous session (tabs, window position, pin state)
         sessionManager.restoreSession()
 

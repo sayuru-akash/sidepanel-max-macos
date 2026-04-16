@@ -14,6 +14,12 @@ final class TabManager: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
 
+    // MARK: - SwiftData
+
+    /// The model context used to persist Tab objects. Set during app startup
+    /// from PersistenceController so that inserts/deletes are actually tracked.
+    var modelContext: ModelContext?
+
     // MARK: - Limits
 
     private let maxTabs = 50
@@ -41,6 +47,7 @@ final class TabManager: ObservableObject {
         )
 
         tabs.append(tab)
+        modelContext?.insert(tab)
 
         // Initialize WKWebView
         let webView = createWebView(for: tab)
@@ -78,6 +85,7 @@ final class TabManager: ObservableObject {
         // Tear down the web view.
         tab.webView?.stopLoading()
         tab.webView = nil
+        modelContext?.delete(tab)
 
         reindex()
     }
@@ -208,7 +216,17 @@ final class TabManager: ObservableObject {
 
     private func searchURL(for query: String) -> URL {
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return URL(string: "https://www.google.com/search?q=\(encoded)")!
+        let engine = SettingsManager.shared.defaultSearchEngine
+        let baseURL: String
+        switch engine {
+        case "duckduckgo":
+            baseURL = "https://duckduckgo.com/?q=\(encoded)"
+        case "bing":
+            baseURL = "https://www.bing.com/search?q=\(encoded)"
+        default:
+            baseURL = "https://www.google.com/search?q=\(encoded)"
+        }
+        return URL(string: baseURL)!
     }
 
     private func closeOldestUnpinnedTab() {

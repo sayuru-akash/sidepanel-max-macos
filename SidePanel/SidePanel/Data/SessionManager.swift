@@ -65,11 +65,15 @@ final class SessionManager {
             }
         }
 
-        // Restore active tab
+        // Restore active tab by saved order index, since createTab() generates
+        // new UUIDs and the old UUID no longer matches any tab.
         if let activeIdString = defaults.string(forKey: "activeTabId"),
-           let activeId = UUID(uuidString: activeIdString),
-           let tab = tabManager.tabs.first(where: { $0.id == activeId }) {
-            tabManager.activateTab(tab)
+           let savedTabData = defaults.array(forKey: tabsKey) as? [[String: Any]],
+           let activeIndex = savedTabData.firstIndex(where: {
+               ($0["id"] as? String) == activeIdString
+           }),
+           activeIndex < tabManager.tabs.count {
+            tabManager.activateTab(tabManager.tabs[activeIndex])
         } else if let first = tabManager.tabs.first {
             tabManager.activateTab(first)
         }

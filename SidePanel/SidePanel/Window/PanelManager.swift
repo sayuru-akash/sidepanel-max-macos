@@ -49,6 +49,8 @@ final class PanelManager: ObservableObject {
     /// Remembers the collapsed icon position.
     private var lastCollapsedOrigin: NSPoint?
 
+    private var frameObservers: [NSObjectProtocol] = []
+
     private init() {}
 
     // MARK: - Show / Hide
@@ -67,6 +69,7 @@ final class PanelManager: ObservableObject {
                 .environmentObject(self)
                 .environmentObject(TabManager.shared)
                 .environmentObject(SettingsManager.shared)
+                .modelContainer(PersistenceController.shared.container)
 
             let hosting = NSHostingController(rootView: AnyView(contentView))
             floatingPanel.contentView = hosting.view
@@ -78,11 +81,49 @@ final class PanelManager: ObservableObject {
 
             self.panel = floatingPanel
             self.hostingController = hosting
+
+            // Observe window frame changes to keep panelFrame in sync
+            observePanelFrame(floatingPanel)
         }
 
         panel?.makeKeyAndOrderFront(nil)
+        panelFrame = panel?.frame ?? .zero
         collapsedWindow?.orderOut(nil)
         state = .pinned
+    }
+
+    // MARK: - Frame Observation
+
+    private func observePanelFrame(_ window: NSPanel) {
+        // Remove any existing observers
+        for observer in frameObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        frameObservers.removeAll()
+
+        let moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncPanelFrame()
+        }
+
+        let resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncPanelFrame()
+        }
+
+        frameObservers = [moveObserver, resizeObserver]
+    }
+
+    private func syncPanelFrame() {
+        if let frame = panel?.frame {
+            panelFrame = frame
+        }
     }
 
     /// Hides the sidebar and shows the collapsed icon instead.
@@ -100,7 +141,9 @@ final class PanelManager: ObservableObject {
     /// Temporarily shows the sidebar (used on hover).
     func temporarilyExpand() {
         guard state == .unpinned else { return }
+        collapsedWindow?.orderOut(nil)
         panel?.makeKeyAndOrderFront(nil)
+        panelFrame = panel?.frame ?? .zero
         state = .temporarilyExpanded
     }
 
@@ -108,6 +151,7 @@ final class PanelManager: ObservableObject {
     func collapseFromTemporary() {
         guard state == .temporarilyExpanded else { return }
         panel?.orderOut(nil)
+        showCollapsedButton()
         state = .unpinned
     }
 
