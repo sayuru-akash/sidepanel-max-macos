@@ -11,8 +11,8 @@ let package = Package(
         .executableTarget(
             name: "SidePanel",
             path: "SidePanel",
-            resources: [
-                .copy("App/Info.plist")
+            exclude: [
+                "App/Info.plist"
             ]
         )
     ]
