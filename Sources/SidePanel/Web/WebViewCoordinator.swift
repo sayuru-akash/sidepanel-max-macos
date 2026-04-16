@@ -1,4 +1,4 @@
-@preconcurrency import WebKit
+import WebKit
 import Combine
 
 /// Acts as the WKNavigationDelegate and WKUIDelegate for a tab's WKWebView.
@@ -60,66 +60,84 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: - WKNavigationDelegate
 
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        tab.isLoading = true
+    nonisolated func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        MainActor.assumeIsolated { [weak self] in
+            self?.tab.isLoading = true
+        }
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        tab.isLoading = false
-        tab.estimatedProgress = 1.0
-        if let url = webView.url {
-            tabManager.recordCompletedNavigation(for: tab, to: url)
-        }
-        scheduleAdaptiveFit(for: webView)
+    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        MainActor.assumeIsolated { [weak self] in
+            guard let self else { return }
 
-        // Extract favicon URL
-        let js = """
-        (function() {
-            var links = document.querySelectorAll('link[rel~="icon"]');
-            if (links.length > 0) return links[links.length - 1].href;
-            return '';
-        })()
-        """
-        Task { [weak self, weak webView] in
-            guard let self, let webView else { return }
-
-            if let result = try? await webView.evaluateJavaScript(js) as? String, !result.isEmpty {
-                self.tab.faviconURLString = result
-            } else if let host = webView.url?.host {
-                self.tab.faviconURLString = "https://www.google.com/s2/favicons?domain=\(host)&sz=64"
-            }
-
+            tab.isLoading = false
+            tab.estimatedProgress = 1.0
             if let url = webView.url {
-                BrowsingHistoryManager.shared.recordVisit(
-                    url: url,
-                    title: self.tab.title,
-                    faviconURLString: self.tab.faviconURLString
-                )
+                tabManager.recordCompletedNavigation(for: tab, to: url)
+            }
+            scheduleAdaptiveFit(for: webView)
+
+            // Extract favicon URL
+            let js = """
+            (function() {
+                var links = document.querySelectorAll('link[rel~="icon"]');
+                if (links.length > 0) return links[links.length - 1].href;
+                return '';
+            })()
+            """
+
+            webView.evaluateJavaScript(js) { [weak self, weak webView] result, _ in
+                guard let self, let webView else { return }
+
+                MainActor.assumeIsolated {
+                    if let favicon = result as? String, !favicon.isEmpty {
+                        self.tab.faviconURLString = favicon
+                    } else if let host = webView.url?.host {
+                        self.tab.faviconURLString = "https://www.google.com/s2/favicons?domain=\(host)&sz=64"
+                    }
+
+                    if let url = webView.url {
+                        BrowsingHistoryManager.shared.recordVisit(
+                            url: url,
+                            title: self.tab.title,
+                            faviconURLString: self.tab.faviconURLString
+                        )
+                    }
+                }
             }
         }
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        tab.isLoading = false
-        scheduleAdaptiveFit(for: webView)
+    nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        MainActor.assumeIsolated { [weak self] in
+            guard let self else { return }
+            tab.isLoading = false
+            scheduleAdaptiveFit(for: webView)
+        }
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        tab.isLoading = false
-        scheduleAdaptiveFit(for: webView)
+    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        MainActor.assumeIsolated { [weak self] in
+            guard let self else { return }
+            tab.isLoading = false
+            scheduleAdaptiveFit(for: webView)
+        }
     }
 
     // MARK: - WKUIDelegate
 
     /// Handle target="_blank" links: open in a new tab.
-    func webView(
+    nonisolated func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = navigationAction.request.url {
-            tabManager.createTab(url: url)
+        MainActor.assumeIsolated { [weak self] in
+            guard let self else { return }
+            if let url = navigationAction.request.url {
+                tabManager.createTab(url: url)
+            }
         }
         return nil
     }

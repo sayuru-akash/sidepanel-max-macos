@@ -1,9 +1,9 @@
 import XCTest
 @testable import SidePanel
 
-@MainActor
 final class SettingsManagerTests: XCTestCase {
 
+    @MainActor
     func testNormalizedHomepageAddsHTTPSWhenMissingScheme() {
         XCTAssertEqual(
             SettingsManager.normalizedHomepageValue("example.com"),
@@ -11,6 +11,7 @@ final class SettingsManagerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testNormalizedHomepageTrimsWhitespace() {
         XCTAssertEqual(
             SettingsManager.normalizedHomepageValue("  https://google.com  "),
@@ -18,6 +19,7 @@ final class SettingsManagerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testNormalizedHomepageFallsBackToGoogleForEmptyInput() {
         XCTAssertEqual(
             SettingsManager.normalizedHomepageValue("   "),
