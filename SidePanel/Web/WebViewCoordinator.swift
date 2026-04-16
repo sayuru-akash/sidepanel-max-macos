@@ -88,6 +88,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             } else if let host = webView.url?.host {
                 self.tab.faviconURLString = "https://www.google.com/s2/favicons?domain=\(host)&sz=64"
             }
+
+            if let url = webView.url {
+                BrowsingHistoryManager.shared.recordVisit(
+                    url: url,
+                    title: self.tab.title,
+                    faviconURLString: self.tab.faviconURLString
+                )
+            }
         }
     }
 

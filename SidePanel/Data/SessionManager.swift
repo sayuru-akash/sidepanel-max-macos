@@ -19,6 +19,9 @@ final class SessionManager {
     func saveSession() {
         saveTabs()
         saveWindowState()
+        if SettingsManager.shared.clearHistoryOnQuit {
+            BrowsingHistoryManager.shared.clearAll()
+        }
     }
 
     // MARK: - Restore

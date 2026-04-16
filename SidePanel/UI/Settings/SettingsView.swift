@@ -18,10 +18,13 @@ struct SettingsView: View {
             PrivacySettingsView()
                 .tabItem { Label("Privacy", systemImage: "shield") }
 
+            HistorySettingsView()
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+
             ShortcutsSettingsView()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
         }
-        .frame(width: 480, height: 320)
+        .frame(width: 560, height: 420)
         .environmentObject(settingsManager)
     }
 }
@@ -120,6 +123,15 @@ struct PrivacySettingsView: View {
             Toggle("Send Do-Not-Track Header", isOn: $settings.doNotTrack)
         }
         .padding()
+    }
+}
+
+// MARK: - History
+
+struct HistorySettingsView: View {
+    var body: some View {
+        HistoryView()
+            .environmentObject(TabManager.shared)
     }
 }
 

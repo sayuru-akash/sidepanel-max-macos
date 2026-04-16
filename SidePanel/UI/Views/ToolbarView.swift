@@ -4,7 +4,7 @@ import SwiftUI
 struct ToolbarView: View {
     @EnvironmentObject var panelManager: PanelManager
     @EnvironmentObject var tabManager: TabManager
-    @State private var showSettings = false
+    @State private var showHistory = false
 
     var body: some View {
         let activeTab = tabManager.activeTab
@@ -42,6 +42,22 @@ struct ToolbarView: View {
             .buttonStyle(.plain)
             .help(panelManager.state == .pinned ? "Unpin sidebar" : "Pin sidebar")
             .accessibilityIdentifier("pinButton")
+
+            Button(action: {
+                showHistory.toggle()
+            }) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("History")
+            .popover(isPresented: $showHistory, arrowEdge: .top) {
+                HistoryView(embeddedInPopover: true) {
+                    showHistory = false
+                }
+                .environmentObject(tabManager)
+            }
 
             // Settings
             Button(action: {
