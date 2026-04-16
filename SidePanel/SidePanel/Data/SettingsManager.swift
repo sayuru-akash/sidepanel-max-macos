@@ -2,6 +2,7 @@ import Foundation
 import Combine
 
 /// Persists user preferences via UserDefaults and publishes changes.
+@MainActor
 final class SettingsManager: ObservableObject {
 
     static let shared = SettingsManager()

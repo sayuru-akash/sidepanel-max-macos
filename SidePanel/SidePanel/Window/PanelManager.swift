@@ -106,7 +106,9 @@ final class PanelManager: ObservableObject {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            self?.syncPanelFrame()
+            MainActor.assumeIsolated {
+                self?.syncPanelFrame()
+            }
         }
 
         let resizeObserver = NotificationCenter.default.addObserver(
@@ -114,7 +116,9 @@ final class PanelManager: ObservableObject {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            self?.syncPanelFrame()
+            MainActor.assumeIsolated {
+                self?.syncPanelFrame()
+            }
         }
 
         frameObservers = [moveObserver, resizeObserver]
@@ -190,7 +194,7 @@ final class PanelManager: ObservableObject {
                 onHoverEnter: { [weak self] in
                     self?.temporarilyExpand()
                 },
-                onHoverExit: { [weak self] in
+                onHoverExit: {
                     AutoCollapseManager.shared.scheduleCollapse()
                 }
             )
