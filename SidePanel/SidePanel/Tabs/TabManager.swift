@@ -95,6 +95,7 @@ final class TabManager: ObservableObject {
         for tab in toClose {
             tab.webView?.stopLoading()
             tab.webView = nil
+            modelContext?.delete(tab)
         }
         if exceptPinned {
             tabs.removeAll { !$0.isPinned }

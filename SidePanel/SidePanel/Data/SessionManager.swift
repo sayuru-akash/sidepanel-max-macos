@@ -51,6 +51,10 @@ final class SessionManager {
         guard let tabData = defaults.array(forKey: tabsKey) as? [[String: Any]] else { return }
         let tabManager = TabManager.shared
 
+        // Clear any existing Tab records from SwiftData to prevent unbounded
+        // store growth on each app restart.
+        tabManager.closeAllTabs(exceptPinned: false)
+
         for data in tabData {
             guard let urlString = data["url"] as? String,
                   let url = URL(string: urlString) else { continue }
