@@ -23,7 +23,8 @@ final class FloatingPanel: NSPanel {
     convenience init() {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let panelHeight = screenFrame.height * 0.85
-        let panelWidth: CGFloat = LayoutMetrics.defaultWidth
+        let configuredWidth = CGFloat(SettingsManager.shared.sidebarWidth)
+        let panelWidth: CGFloat = min(max(configuredWidth, LayoutMetrics.minWidth), LayoutMetrics.maxWidth)
 
         // Default position: right edge, vertically centered
         let x = screenFrame.maxX - panelWidth - 12

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Combine
 
@@ -23,10 +24,20 @@ final class SettingsManager: ObservableObject {
         didSet { defaults.set(defaultSearchEngine, forKey: "defaultSearchEngine") }
     }
 
+    @Published var homepage: String {
+        didSet {
+            let normalized = Self.normalizedHomepageValue(homepage)
+            defaults.set(normalized, forKey: "homepage")
+        }
+    }
+
     // MARK: - Appearance
 
     @Published var theme: Theme {
-        didSet { defaults.set(theme.rawValue, forKey: "theme") }
+        didSet {
+            defaults.set(theme.rawValue, forKey: "theme")
+            applyTheme()
+        }
     }
 
     @Published var sidebarWidth: Double {
@@ -75,6 +86,7 @@ final class SettingsManager: ObservableObject {
             "launchAtLogin": false,
             "rememberLastSession": true,
             "defaultSearchEngine": "google",
+            "homepage": "https://google.com",
             "theme": Theme.auto.rawValue,
             "sidebarWidth": LayoutMetrics.defaultWidth,
             "transparency": 0.85,
@@ -89,6 +101,7 @@ final class SettingsManager: ObservableObject {
         self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.rememberLastSession = defaults.bool(forKey: "rememberLastSession")
         self.defaultSearchEngine = defaults.string(forKey: "defaultSearchEngine") ?? "google"
+        self.homepage = Self.normalizedHomepageValue(defaults.string(forKey: "homepage") ?? "https://google.com")
         self.theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "auto") ?? .auto
         self.sidebarWidth = defaults.double(forKey: "sidebarWidth")
         self.transparency = defaults.double(forKey: "transparency")
@@ -96,6 +109,8 @@ final class SettingsManager: ObservableObject {
         self.showOnAllSpaces = defaults.bool(forKey: "showOnAllSpaces")
         self.clearHistoryOnQuit = defaults.bool(forKey: "clearHistoryOnQuit")
         self.doNotTrack = defaults.bool(forKey: "doNotTrack")
+
+        applyTheme()
     }
 
     /// Reset everything to factory defaults.
@@ -108,6 +123,7 @@ final class SettingsManager: ObservableObject {
         launchAtLogin = false
         rememberLastSession = true
         defaultSearchEngine = "google"
+        homepage = "https://google.com"
         theme = .auto
         sidebarWidth = LayoutMetrics.defaultWidth
         transparency = 0.85
@@ -115,5 +131,25 @@ final class SettingsManager: ObservableObject {
         showOnAllSpaces = true
         clearHistoryOnQuit = false
         doNotTrack = true
+    }
+
+    private static func normalizedHomepageValue(_ rawValue: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "https://google.com" }
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return url.absoluteString
+        }
+        return "https://\(trimmed)"
+    }
+
+    private func applyTheme() {
+        switch theme {
+        case .auto:
+            NSApp.appearance = nil
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        }
     }
 }

@@ -1,3 +1,5 @@
+import AppKit
+import Combine
 import Foundation
 
 /// Saves and restores the complete app session (tabs, window position, pin state)
@@ -11,17 +13,75 @@ final class SessionManager {
     private let tabsKey = "savedTabs"
     private let windowFrameKey = "savedWindowFrame"
     private let isPinnedKey = "savedIsPinned"
+    private let collapsedOriginKey = "savedCollapsedOrigin"
+    private var cancellables: Set<AnyCancellable> = []
+    private var snapshotWorkItem: DispatchWorkItem?
+    private var hasStartedObserving = false
 
     private init() {}
+
+    func startObservingSessionState() {
+        guard !hasStartedObserving else { return }
+        hasStartedObserving = true
+
+        let panelManager = PanelManager.shared
+        let tabManager = TabManager.shared
+
+        panelManager.$state
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.scheduleSnapshotSave()
+            }
+            .store(in: &cancellables)
+
+        panelManager.$panelFrame
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] frame in
+                guard frame != .zero else { return }
+                self?.scheduleSnapshotSave()
+            }
+            .store(in: &cancellables)
+
+        tabManager.$tabs
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.scheduleSnapshotSave()
+            }
+            .store(in: &cancellables)
+
+        tabManager.$activeTabId
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.scheduleSnapshotSave()
+            }
+            .store(in: &cancellables)
+    }
 
     // MARK: - Save
 
     func saveSession() {
-        saveTabs()
-        saveWindowState()
+        snapshotWorkItem?.cancel()
+        snapshotWorkItem = nil
+        saveSnapshot()
         if SettingsManager.shared.clearHistoryOnQuit {
             BrowsingHistoryManager.shared.clearAll()
         }
+    }
+
+    func scheduleSnapshotSave() {
+        snapshotWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.saveSnapshot()
+        }
+        snapshotWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
     }
 
     // MARK: - Restore
@@ -64,7 +124,7 @@ final class SessionManager {
 
         for data in tabData {
             guard let savedURLString = data["url"] as? String else { continue }
-            let urlString = savedURLString == "about:blank" ? TabManager.defaultHomeURLString : savedURLString
+            let urlString = savedURLString == "about:blank" ? TabManager.shared.defaultHomeURLString : savedURLString
             guard let url = URL(string: urlString) else { continue }
 
             let tab = tabManager.createTab(url: url, activate: false)
@@ -99,7 +159,7 @@ final class SessionManager {
     // MARK: - Window State
 
     private func saveWindowState() {
-        let (frame, isPinned) = PanelManager.shared.currentWindowState()
+        let (frame, isPinned, collapsedOrigin) = PanelManager.shared.currentWindowState()
         let frameDict: [String: Double] = [
             "x": frame.origin.x,
             "y": frame.origin.y,
@@ -108,6 +168,15 @@ final class SessionManager {
         ]
         defaults.set(frameDict, forKey: windowFrameKey)
         defaults.set(isPinned, forKey: isPinnedKey)
+
+        if let collapsedOrigin {
+            defaults.set([
+                "x": collapsedOrigin.x,
+                "y": collapsedOrigin.y
+            ], forKey: collapsedOriginKey)
+        } else {
+            defaults.removeObject(forKey: collapsedOriginKey)
+        }
     }
 
     private func restoreWindowState() {
@@ -119,6 +188,22 @@ final class SessionManager {
             height: frameDict["h"] ?? LayoutMetrics.defaultHeight
         )
         let isPinned = defaults.bool(forKey: isPinnedKey)
-        PanelManager.shared.restoreWindowState(frame: frame, isPinned: isPinned)
+        let collapsedOrigin: NSPoint?
+        if let originDict = defaults.dictionary(forKey: collapsedOriginKey) as? [String: Double] {
+            collapsedOrigin = NSPoint(x: originDict["x"] ?? 0, y: originDict["y"] ?? 0)
+        } else {
+            collapsedOrigin = nil
+        }
+
+        PanelManager.shared.restoreWindowState(
+            frame: frame,
+            isPinned: isPinned,
+            collapsedOrigin: collapsedOrigin
+        )
+    }
+
+    private func saveSnapshot() {
+        saveTabs()
+        saveWindowState()
     }
 }

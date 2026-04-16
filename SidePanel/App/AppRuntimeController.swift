@@ -1,4 +1,6 @@
 import AppKit
+import Darwin
+import SwiftUI
 import SwiftData
 
 /// Coordinates one-time app startup that must happen even when the Swift package
@@ -14,6 +16,8 @@ final class AppRuntimeController: NSObject {
 
     private let sessionManager = SessionManager.shared
     private var statusItem: NSStatusItem?
+    private var settingsWindow: NSWindow?
+    private var terminationSignalSources: [DispatchSourceSignal] = []
     private var hasStarted = false
 
     private override init() {}
@@ -33,6 +37,8 @@ final class AppRuntimeController: NSObject {
         }
 
         setupStatusItem()
+        sessionManager.startObservingSessionState()
+        installTerminationSignalHandlers()
         PersistenceController.shared.startAutoSave()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -51,6 +57,15 @@ final class AppRuntimeController: NSObject {
 
     func reopen() {
         panelManager.showPanel()
+    }
+
+    func showSettingsWindow() {
+        let window = settingsWindow ?? makeSettingsWindow()
+        settingsWindow = window
+
+        NSApp.activate(ignoringOtherApps: true)
+        positionSettingsWindow(window)
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func setupStatusItem() {
@@ -83,11 +98,93 @@ final class AppRuntimeController: NSObject {
     }
 
     @objc private func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        showSettingsWindow()
     }
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        let rootView = SettingsView()
+            .environmentObject(settingsManager)
+            .modelContainer(PersistenceController.shared.container)
+
+        let hostingController = NSHostingController(rootView: rootView)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 500),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Settings"
+        window.isReleasedWhenClosed = false
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .preference
+        window.contentViewController = hostingController
+        window.setContentSize(NSSize(width: 720, height: 500))
+        return window
+    }
+
+    private func positionSettingsWindow(_ window: NSWindow) {
+        let windowSize = window.frame.size
+
+        if panelManager.panelFrame != .zero,
+           let screen = visibleFrame(containing: panelManager.panelFrame) {
+            let panelFrame = panelManager.panelFrame
+            var origin = NSPoint(
+                x: panelFrame.minX - windowSize.width - 18,
+                y: panelFrame.maxY - windowSize.height
+            )
+
+            if origin.x < screen.minX + 12 {
+                origin.x = min(screen.maxX - windowSize.width - 12, panelFrame.maxX + 18)
+            }
+
+            origin.x = min(max(origin.x, screen.minX + 12), screen.maxX - windowSize.width - 12)
+            origin.y = min(max(origin.y, screen.minY + 12), screen.maxY - windowSize.height - 12)
+
+            window.setFrameOrigin(origin)
+        } else {
+            window.centerIfNeeded()
+        }
+    }
+
+    private func visibleFrame(containing frame: NSRect) -> NSRect? {
+        NSScreen.screens
+            .map(\.visibleFrame)
+            .first(where: {
+                $0.intersects(frame) ||
+                $0.contains(frame.origin) ||
+                $0.contains(NSPoint(x: frame.maxX, y: frame.maxY))
+            })
+    }
+
+    private func installTerminationSignalHandlers() {
+        guard terminationSignalSources.isEmpty else { return }
+
+        for signalNumber in [SIGINT, SIGTERM] {
+            signal(signalNumber, SIG_IGN)
+
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler { [weak self] in
+                guard let self else { return }
+                self.saveSession()
+                signal(signalNumber, SIG_DFL)
+                kill(getpid(), signalNumber)
+            }
+            source.resume()
+            terminationSignalSources.append(source)
+        }
+    }
+}
+
+private extension NSWindow {
+    func centerIfNeeded() {
+        if frame.origin == .zero {
+            center()
+        }
     }
 }

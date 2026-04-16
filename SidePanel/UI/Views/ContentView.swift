@@ -10,7 +10,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             // Glass background
-            GlassBackground(material: .hudWindow)
+            GlassBackground(material: .hudWindow, opacity: settingsManager.transparency)
                 .ignoresSafeArea()
 
             HStack(spacing: 0) {

@@ -61,7 +61,7 @@ struct ToolbarView: View {
 
             // Settings
             Button(action: {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                AppRuntimeController.shared.showSettingsWindow()
             }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13, weight: .medium))

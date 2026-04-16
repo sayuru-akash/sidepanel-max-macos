@@ -1,100 +1,142 @@
 # SidePanel
 
-A native macOS floating sidebar browser. Browse the web without leaving your workflow.
+SidePanel is a native macOS floating browser panel built with SwiftUI, AppKit, and WebKit. It stays above other apps, collapses into a circular hover bubble when unpinned, and keeps browsing tools available without taking over the desktop.
 
-## What It Does
+## Current Features
 
-SidePanel is a lightweight, always-on-top browser panel that floats over all your applications. It gives you quick web access -- reference docs while coding, check a site while writing, look something up without switching windows.
-
-**Key features:**
-
-- Always-on-top floating panel built with NSPanel
-- Full WKWebView browser (not an iframe -- works with every site)
-- Pin/unpin: keep the sidebar open or collapse it to a small floating icon
-- Vertical tab bar with favicon display and drag-to-reorder
-- Global keyboard shortcuts (Cmd+Shift+S to toggle, etc.)
-- Glassmorphism UI with dark/light mode support
-- Session persistence -- tabs and window position survive restarts
-- No Dock icon, no Cmd+Tab entry -- stays out of your way
+- Always-on-top floating `NSPanel`
+- Pinned and unpinned modes
+- Collapsed circular icon with hover-to-expand behavior
+- Multi-tab browsing with per-tab session restore
+- Restored back/forward history after relaunch
+- Address bar with history suggestions
+- Browsing history popover in the toolbar
+- Minimal settings window for real app preferences only
+- Adaptive page fitting for narrow responsive sites
+- Global shortcuts through macOS Accessibility permission
+- Accessory-style app behavior with no Dock or Cmd-Tab entry
 
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
-- Apple Silicon or Intel Mac
+- macOS 14 or later
+- Xcode 15 or later if opening in Xcode
 
-## Build & Run
+## Build And Run
 
-### Option 1: Xcode
-
-1. Open `SidePanel/` in Xcode 15+
-2. Create a new macOS App project and add all Swift files from the `SidePanel/` directory
-3. Set deployment target to macOS 14.0
-4. Set `Info.plist` to include `LSUIElement = YES`
-5. Build and run (Cmd+R)
-
-### Option 2: Swift Package Manager
+### Swift Package Manager
 
 ```bash
-cd sidepanel-max-macos
 swift build
 ./.build/debug/SidePanel
 ```
 
-The executable is a GUI process, so the terminal stays attached while the app is running. Use `Ctrl+C` in that terminal to stop it.
+This launches a GUI process from the terminal, so the shell stays attached while the app is running. Use `Ctrl+C` in that terminal to stop it.
+
+### Xcode
+
+1. Open `Package.swift` in Xcode.
+2. Select the `SidePanel` executable target.
+3. Build and run.
 
 ## First Launch
 
-On first launch, macOS should ask for **Accessibility** permission:
+SidePanel uses Accessibility permission for system-wide shortcuts.
 
-1. Approve the system prompt if it appears
-2. Or open System Settings > Privacy & Security > Accessibility
-3. Find `SidePanel` and toggle it on
-4. Relaunch the app if needed
-
-This permission is needed for global keyboard shortcuts to work from any application.
+1. Launch the app.
+2. If macOS shows the Accessibility prompt, approve it.
+3. If it does not, open `System Settings > Privacy & Security > Accessibility`.
+4. Enable `SidePanel`.
+5. Relaunch the app if macOS requires it.
 
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| Cmd+Shift+S | Toggle sidebar |
-| Cmd+Shift+N | New tab |
-| Cmd+Shift+W | Close current tab |
-| Cmd+Shift+[ | Previous tab |
-| Cmd+Shift+] | Next tab |
-| Cmd+Shift+L | Focus address bar |
+| `Cmd+Shift+S` | Toggle sidebar |
+| `Cmd+Shift+N` | New tab |
+| `Cmd+Shift+W` | Close current tab |
+| `Cmd+Shift+[` | Previous tab |
+| `Cmd+Shift+]` | Next tab |
+| `Cmd+Shift+L` | Focus address bar |
 
-All shortcuts work system-wide, even when SidePanel is not the active app.
+## Toolbar
 
-## Mouse Interaction
+The toolbar currently provides:
 
-- **Drag** the sidebar background to reposition
-- **Hover** the collapsed icon to temporarily expand
-- **Click** the pin button to keep the sidebar open
-- **Right-click** tabs for context menu (close, duplicate, pin)
+- Back
+- Forward
+- Pin / unpin
+- History popover
+- Settings
+
+## Settings
+
+The settings window is intentionally minimal and only includes active preferences:
+
+- `General`
+  - Homepage
+  - Default search engine
+  - Remember last session
+- `Appearance`
+  - Theme
+  - Sidebar width
+  - Transparency
+- `Behavior`
+  - Auto-collapse delay
+  - Show on all spaces
+- `Privacy`
+  - Clear browsing history now
+  - Clear history on quit
+- `Shortcuts`
+  - Shortcut reference
+  - Open Accessibility settings
+
+Browsing history is not a settings tab. It is available from the toolbar history button.
+
+## Interaction Notes
+
+- Drag the panel background to move it.
+- Resize the panel from its edges.
+- Unpin to collapse the app into the circular floating icon.
+- Hover the icon to temporarily expand the panel.
+- Move out of the temporary panel to collapse it again.
+- Use the toolbar history button to reopen previously visited pages.
 
 ## Architecture
 
-- **Swift 5.9+ / SwiftUI / AppKit** -- native performance, no Electron
-- **WKWebView** -- full WebKit engine, same as Safari
-- **NSPanel** -- floating window that stays above all apps
-- **MVVM** -- clean separation of concerns
-- **SwiftData** -- lightweight persistence for tabs
-- **Carbon HotKeys** -- system-wide keyboard shortcuts
+The current codebase is organized like this:
 
-```
+```text
 SidePanel/
-  App/          -- Entry point, AppDelegate
-  Window/       -- FloatingPanel, CollapsedButtonWindow, PanelManager
-  UI/Views/     -- ContentView, TabBar, AddressBar, Toolbar
-  UI/Settings/  -- Settings window tabs
-  UI/Components/-- GlassBackground, FaviconImage
-  Web/          -- WKWebView wrapper and coordinator
-  Tabs/         -- Tab model and TabManager
-  Data/         -- Persistence, settings, session management
-  Utils/        -- Hotkeys, permissions, design system tokens
+  App/
+  Data/
+  Tabs/
+  UI/
+    Components/
+    Settings/
+    Views/
+  Utils/
+  Web/
+  Window/
 ```
+
+Main pieces:
+
+- `App/` app lifecycle and startup coordination
+- `Window/` floating panel and collapsed bubble window management
+- `Tabs/` tab state, restored navigation history, and tab-level navigation
+- `Web/` `WKWebView` integration and adaptive page fitting
+- `Data/` settings, session persistence, and browsing history persistence
+- `UI/` SwiftUI views for toolbar, tabs, settings, address bar, and history
+
+## Notes
+
+- The app stores window/session snapshots locally in app preferences.
+- Open tabs are persisted in SwiftData.
+- Browsing history is stored locally in app preferences.
+- The homepage defaults to Google and can be changed in Settings.
+- Browsing history can be cleared immediately from Settings or automatically on quit.
 
 ## License
 
-MIT License -- see LICENSE file.
+MIT

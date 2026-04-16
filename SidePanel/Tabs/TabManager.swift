@@ -8,8 +8,6 @@ import Combine
 final class TabManager: ObservableObject {
 
     static let shared = TabManager()
-    static let defaultHomeURL = URL(string: "https://google.com")!
-    static let defaultHomeURLString = defaultHomeURL.absoluteString
 
     // MARK: - Published State
 
@@ -26,6 +24,8 @@ final class TabManager: ObservableObject {
 
     private let maxTabs = 50
     private var pendingHistoryIndexByTabID: [UUID: Int] = [:]
+    private var cancellables: Set<AnyCancellable> = []
+    private var observedHomepage: String
 
     // MARK: - Active Tab Helper
 
@@ -33,7 +33,28 @@ final class TabManager: ObservableObject {
         tabs.first { $0.id == activeTabId }
     }
 
-    private init() {}
+    var defaultHomeURLString: String {
+        Self.normalizedHomepage(SettingsManager.shared.homepage)
+    }
+
+    private var defaultHomeURL: URL {
+        URL(string: defaultHomeURLString) ?? URL(string: "https://google.com")!
+    }
+
+    private init() {
+        observedHomepage = Self.normalizedHomepage(SettingsManager.shared.homepage)
+
+        SettingsManager.shared.$homepage
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newHomepage in
+                guard let self else { return }
+                let oldHomepage = self.observedHomepage
+                let normalizedNewHomepage = Self.normalizedHomepage(newHomepage)
+                self.observedHomepage = normalizedNewHomepage
+                self.updateHomepageTabs(from: oldHomepage, to: normalizedNewHomepage)
+            }
+            .store(in: &cancellables)
+    }
 
     // MARK: - CRUD
 
@@ -66,6 +87,7 @@ final class TabManager: ObservableObject {
             activateTab(tab)
         }
 
+        SessionManager.shared.scheduleSnapshotSave()
         return tab
     }
 
@@ -92,6 +114,7 @@ final class TabManager: ObservableObject {
         modelContext?.delete(tab)
 
         reindex()
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     func closeAllTabs(exceptPinned: Bool = true) {
@@ -109,6 +132,7 @@ final class TabManager: ObservableObject {
         }
         activeTabId = tabs.first?.id
         reindex()
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     func activateTab(_ tab: Tab) {
@@ -124,6 +148,8 @@ final class TabManager: ObservableObject {
                 tab.url = url.absoluteString
             }
         }
+
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     func duplicateTab(_ tab: Tab) {
@@ -135,6 +161,7 @@ final class TabManager: ObservableObject {
     func reorderTabs(from source: IndexSet, to destination: Int) {
         tabs.move(fromOffsets: source, toOffset: destination)
         reindex()
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     // MARK: - Navigation Helpers
@@ -149,6 +176,7 @@ final class TabManager: ObservableObject {
         pendingHistoryIndexByTabID.removeValue(forKey: tab.id)
         tab.url = url.absoluteString
         tab.webView?.load(URLRequest(url: url))
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     func goBack() {
@@ -200,7 +228,7 @@ final class TabManager: ObservableObject {
     }
 
     private func loadDefaultPage(in webView: WKWebView) {
-        webView.load(URLRequest(url: Self.defaultHomeURL))
+        webView.load(URLRequest(url: defaultHomeURL))
     }
 
     func recordCompletedNavigation(for tab: Tab, to rawURL: URL) {
@@ -225,14 +253,24 @@ final class TabManager: ObservableObject {
 
         tab.url = urlString
         objectWillChange.send()
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     private func normalizedURLString(_ rawValue: String?) -> String {
         let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty || trimmed == "about:blank" {
-            return Self.defaultHomeURLString
+            return defaultHomeURLString
         }
         return trimmed
+    }
+
+    private static func normalizedHomepage(_ rawValue: String?) -> String {
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return "https://google.com" }
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return url.absoluteString
+        }
+        return "https://\(trimmed)"
     }
 
     /// Turns user input into a URL -- either directly or via search.
@@ -338,11 +376,39 @@ final class TabManager: ObservableObject {
         tab.historyEntries = normalizedEntries
         tab.historyIndex = normalizedIndex
         tab.url = normalizedEntries[normalizedIndex]
+        SessionManager.shared.scheduleSnapshotSave()
     }
 
     private func reindex() {
         for (i, tab) in tabs.enumerated() {
             tab.order = i
         }
+    }
+
+    private func updateHomepageTabs(from oldHomepage: String, to newHomepage: String) {
+        let previousHome = normalizedURLString(oldHomepage)
+        let updatedHome = normalizedURLString(newHomepage)
+        guard previousHome != updatedHome else { return }
+
+        let updatedHomeURL = URL(string: updatedHome) ?? defaultHomeURL
+
+        for tab in tabs {
+            let currentURL = normalizedURLString(tab.url)
+            let entries = historyEntries(for: tab)
+            let isBlankTab = tab.url == "about:blank" || tab.url.isEmpty
+            let isSimpleHomeTab = currentURL == previousHome && entries.count <= 1
+
+            guard isBlankTab || isSimpleHomeTab else { continue }
+
+            tab.url = updatedHome
+            tab.historyEntries = [updatedHome]
+            tab.historyIndex = 0
+
+            if let webView = tab.webView {
+                webView.load(URLRequest(url: updatedHomeURL))
+            }
+        }
+
+        SessionManager.shared.scheduleSnapshotSave()
     }
 }

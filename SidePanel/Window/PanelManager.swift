@@ -51,10 +51,14 @@ final class PanelManager: ObservableObject {
     private var lastCollapsedOrigin: NSPoint?
 
     private var frameObservers: [NSObjectProtocol] = []
+    private var collapsedMoveObserver: NSObjectProtocol?
+    private var cancellables: Set<AnyCancellable> = []
     private let hoverTransitionDuration: TimeInterval = 0.14
     private let hoverSlideOffset: CGFloat = 18
 
-    private init() {}
+    private init() {
+        bindSettings()
+    }
 
     // MARK: - Show / Hide
 
@@ -90,6 +94,8 @@ final class PanelManager: ObservableObject {
             // Observe window frame changes to keep panelFrame in sync
             observePanelFrame(floatingPanel)
         }
+
+        applyWindowPreferences()
 
         animateWindowIn(panel, makeKey: true)
         animateWindowOut(collapsedWindow)
@@ -133,6 +139,7 @@ final class PanelManager: ObservableObject {
     private func syncPanelFrame() {
         if let frame = panel?.frame {
             panelFrame = frame
+            lastPanelFrame = frame
         }
     }
 
@@ -142,12 +149,56 @@ final class PanelManager: ObservableObject {
             return nil
         }
 
-        let visibleFrame = NSScreen.main?.visibleFrame ?? .zero
-        guard !visibleFrame.isEmpty, frame.intersects(visibleFrame) else {
+        guard let visibleFrame = visibleFrame(containing: frame), frame.intersects(visibleFrame) else {
             return nil
         }
 
         return frame
+    }
+
+    private func validatedCollapsedOrigin(_ origin: NSPoint?, fallbackPanelFrame: NSRect?) -> NSPoint? {
+        if let origin {
+            let candidateRect = NSRect(
+                origin: origin,
+                size: NSSize(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
+            )
+
+            if let visibleFrame = visibleFrame(containing: candidateRect),
+               visibleFrame.contains(candidateRect) {
+                return origin
+            }
+        }
+
+        guard let fallbackPanelFrame else { return nil }
+        return collapsedOrigin(for: fallbackPanelFrame)
+    }
+
+    private func visibleFrame(containing frame: NSRect) -> NSRect? {
+        NSScreen.screens
+            .map(\.visibleFrame)
+            .first(where: {
+                $0.intersects(frame) ||
+                $0.contains(frame.origin) ||
+                $0.contains(NSPoint(x: frame.maxX, y: frame.maxY))
+            })
+    }
+
+    private func collapsedOrigin(for panelFrame: NSRect) -> NSPoint {
+        let size = LayoutMetrics.collapsedSize
+        let fallbackFrame = NSScreen.main?.visibleFrame ?? .zero
+        let screenFrame = visibleFrame(containing: panelFrame) ?? fallbackFrame
+
+        let proposedOrigin = NSPoint(
+            x: panelFrame.maxX - size - 12,
+            y: panelFrame.midY - size / 2
+        )
+
+        guard !screenFrame.isEmpty else { return proposedOrigin }
+
+        return NSPoint(
+            x: min(max(proposedOrigin.x, screenFrame.minX + 12), screenFrame.maxX - size - 12),
+            y: min(max(proposedOrigin.y, screenFrame.minY + 12), screenFrame.maxY - size - 12)
+        )
     }
 
     /// Hides the sidebar and shows the collapsed icon instead.
@@ -157,6 +208,7 @@ final class PanelManager: ObservableObject {
         // Remember where the panel was
         if let frame = panel?.frame {
             lastPanelFrame = frame
+            lastCollapsedOrigin = collapsedOrigin(for: frame)
         }
 
         showCollapsedButton()
@@ -230,6 +282,25 @@ final class PanelManager: ObservableObject {
 
             self.collapsedWindow = window
             self.collapsedHostingController = hosting
+            observeCollapsedWindowFrame(window)
+        }
+
+        applyWindowPreferences()
+    }
+
+    private func observeCollapsedWindowFrame(_ window: NSWindow) {
+        if let collapsedMoveObserver {
+            NotificationCenter.default.removeObserver(collapsedMoveObserver)
+        }
+
+        collapsedMoveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.lastCollapsedOrigin = window.frame.origin
+            }
         }
     }
 
@@ -319,17 +390,73 @@ final class PanelManager: ObservableObject {
         })
     }
 
+    private func bindSettings() {
+        let settings = SettingsManager.shared
+
+        settings.$sidebarWidth
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] width in
+                self?.applySidebarWidth(width)
+            }
+            .store(in: &cancellables)
+
+        settings.$showOnAllSpaces
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.applyWindowPreferences()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applySidebarWidth(_ width: Double) {
+        let clampedWidth = min(max(CGFloat(width), LayoutMetrics.minWidth), LayoutMetrics.maxWidth)
+
+        if var frame = lastPanelFrame {
+            let maxX = frame.maxX
+            frame.size.width = clampedWidth
+            frame.origin.x = maxX - clampedWidth
+            lastPanelFrame = frame
+        }
+
+        guard let panel else { return }
+
+        var frame = panel.frame
+        let maxX = frame.maxX
+        frame.size.width = clampedWidth
+        frame.origin.x = maxX - clampedWidth
+        panel.setFrame(frame, display: true, animate: true)
+        panelFrame = frame
+        lastPanelFrame = frame
+    }
+
+    private func applyWindowPreferences() {
+        let behavior = collectionBehavior(showOnAllSpaces: SettingsManager.shared.showOnAllSpaces)
+        panel?.collectionBehavior = behavior
+        collapsedWindow?.collectionBehavior = behavior
+    }
+
+    private func collectionBehavior(showOnAllSpaces: Bool) -> NSWindow.CollectionBehavior {
+        if showOnAllSpaces {
+            return [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        }
+        return [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+    }
+
     // MARK: - Persistence Helpers
 
     /// Returns the current window state for session saving.
-    func currentWindowState() -> (frame: NSRect, isPinned: Bool) {
+    func currentWindowState() -> (frame: NSRect, isPinned: Bool, collapsedOrigin: NSPoint?) {
         let frame = panel?.frame ?? lastPanelFrame ?? .zero
-        return (frame, state == .pinned)
+        let collapsedOrigin = collapsedWindow?.frame.origin ?? lastCollapsedOrigin
+        return (frame, state == .pinned, collapsedOrigin)
     }
 
     /// Restores window state from a saved session.
-    func restoreWindowState(frame: NSRect, isPinned: Bool) {
+    func restoreWindowState(frame: NSRect, isPinned: Bool, collapsedOrigin: NSPoint?) {
         lastPanelFrame = validatedPanelFrame(frame)
+        lastCollapsedOrigin = validatedCollapsedOrigin(collapsedOrigin, fallbackPanelFrame: lastPanelFrame)
         if isPinned {
             showPanel()
             if let frame = lastPanelFrame {

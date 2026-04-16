@@ -17,11 +17,20 @@ enum PermissionManager {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
-    // MARK: - Private
+    static func openAccessibilityPreferences() {
+        let preferenceURLs = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+            "x-apple.systempreferences:com.apple.Settings.PrivacySecurity.extension?Privacy_Accessibility"
+        ]
 
-    private static func openAccessibilityPreferences() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
+        for preferenceURL in preferenceURLs {
+            if let url = URL(string: preferenceURL), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+
+        if let settingsURL = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity") {
+            _ = NSWorkspace.shared.open(settingsURL)
         }
     }
 }
