@@ -13,8 +13,11 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var urlObservation: NSKeyValueObservation?
     private var boundsObservation: NSKeyValueObservation?
     private var fitTask: Task<Void, Never>?
+    private var initialRevealTask: Task<Void, Never>?
+    private var isAwaitingInitialPresentation = false
 
     private let fitDebounceNanoseconds: UInt64 = 120_000_000
+    private let initialFitDebounceNanoseconds: UInt64 = 20_000_000
     private let minimumAdaptiveZoom: Double = 0.78
     private let overflowTolerance: Double = 1.02
 
@@ -32,6 +35,9 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             Task { @MainActor [weak self] in
                 self?.tab.estimatedProgress = wv.estimatedProgress
                 self?.tab.isLoading = wv.isLoading
+                if wv.isLoading, wv.estimatedProgress > 0.08 {
+                    self?.scheduleAdaptiveFit(for: wv, debounceNanoseconds: self?.initialFitDebounceNanoseconds ?? 20_000_000)
+                }
             }
         }
 
@@ -53,7 +59,10 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         boundsObservation = webView.observe(\.bounds, options: .new) { [weak self] wv, _ in
             Task { @MainActor [weak self] in
-                self?.scheduleAdaptiveFit(for: wv)
+                let debounce = (self?.isAwaitingInitialPresentation == true)
+                    ? self?.initialFitDebounceNanoseconds
+                    : self?.fitDebounceNanoseconds
+                self?.scheduleAdaptiveFit(for: wv, debounceNanoseconds: debounce ?? 120_000_000)
             }
         }
     }
@@ -63,6 +72,13 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     nonisolated func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         MainActor.assumeIsolated { [weak self] in
             self?.tab.isLoading = true
+            self?.prepareForInitialPresentation(of: webView)
+        }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        MainActor.assumeIsolated { [weak self] in
+            self?.scheduleAdaptiveFit(for: webView, debounceNanoseconds: self?.initialFitDebounceNanoseconds ?? 20_000_000)
         }
     }
 
@@ -75,7 +91,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             if let url = webView.url {
                 tabManager.recordCompletedNavigation(for: tab, to: url)
             }
-            scheduleAdaptiveFit(for: webView)
+            scheduleAdaptiveFit(for: webView, debounceNanoseconds: 0)
 
             // Extract favicon URL
             let js = """
@@ -112,7 +128,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         MainActor.assumeIsolated { [weak self] in
             guard let self else { return }
             tab.isLoading = false
-            scheduleAdaptiveFit(for: webView)
+            scheduleAdaptiveFit(for: webView, debounceNanoseconds: 0)
+            revealWebViewIfNeeded(webView)
         }
     }
 
@@ -120,7 +137,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         MainActor.assumeIsolated { [weak self] in
             guard let self else { return }
             tab.isLoading = false
-            scheduleAdaptiveFit(for: webView)
+            scheduleAdaptiveFit(for: webView, debounceNanoseconds: 0)
+            revealWebViewIfNeeded(webView)
         }
     }
 
@@ -144,12 +162,15 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: - Adaptive Layout
 
-    func scheduleAdaptiveFit(for webView: WKWebView) {
+    func scheduleAdaptiveFit(for webView: WKWebView, debounceNanoseconds: UInt64? = nil) {
         fitTask?.cancel()
         fitTask = Task { @MainActor [weak self, weak webView] in
             guard let self, let webView else { return }
 
-            try? await Task.sleep(nanoseconds: fitDebounceNanoseconds)
+            let delay = debounceNanoseconds ?? fitDebounceNanoseconds
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
             guard !Task.isCancelled else { return }
 
             await applyAdaptiveFit(to: webView)
@@ -176,7 +197,10 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         })();
         """
 
-        guard let result = try? await webView.evaluateJavaScript(script) else { return }
+        guard let result = try? await webView.evaluateJavaScript(script) else {
+            revealWebViewIfNeeded(webView)
+            return
+        }
 
         let contentWidth: Double
         switch result {
@@ -187,10 +211,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         case let value as Int:
             contentWidth = Double(value)
         default:
+            revealWebViewIfNeeded(webView)
             return
         }
 
-        guard contentWidth > 0 else { return }
+        guard contentWidth > 0 else {
+            revealWebViewIfNeeded(webView)
+            return
+        }
 
         let targetZoom: Double
         if contentWidth > viewportWidth * overflowTolerance {
@@ -201,6 +229,40 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         if abs(webView.pageZoom - targetZoom) > 0.02 {
             webView.pageZoom = targetZoom
+        }
+
+        revealWebViewIfNeeded(webView)
+    }
+
+    private func prepareForInitialPresentation(of webView: WKWebView) {
+        isAwaitingInitialPresentation = true
+        fitTask?.cancel()
+        initialRevealTask?.cancel()
+
+        webView.alphaValue = 0
+        if webView.bounds.width > 0 {
+            webView.pageZoom = minimumAdaptiveZoom
+        }
+
+        initialRevealTask = Task { @MainActor [weak self, weak webView] in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard let self, let webView, !Task.isCancelled else { return }
+            self.revealWebViewIfNeeded(webView)
+        }
+    }
+
+    private func revealWebViewIfNeeded(_ webView: WKWebView) {
+        guard isAwaitingInitialPresentation else { return }
+
+        isAwaitingInitialPresentation = false
+        initialRevealTask?.cancel()
+        initialRevealTask = nil
+
+        if webView.alphaValue < 1 {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.08
+                webView.animator().alphaValue = 1
+            }
         }
     }
 }

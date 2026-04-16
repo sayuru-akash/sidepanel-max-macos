@@ -55,6 +55,9 @@ final class PanelManager: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private let hoverTransitionDuration: TimeInterval = 0.14
     private let hoverSlideOffset: CGFloat = 18
+    private let minimumHoverReachDelay: TimeInterval = 0.18
+    private let maximumHoverReachDelay: TimeInterval = 0.75
+    private let hoverReachPixelsPerSecond: CGFloat = 1400
 
     private init() {
         bindSettings()
@@ -140,6 +143,13 @@ final class PanelManager: ObservableObject {
         if let frame = panel?.frame {
             panelFrame = frame
             lastPanelFrame = frame
+
+            if state == .temporarilyExpanded {
+                let attachedOrigin = collapsedOrigin(for: frame)
+                lastCollapsedOrigin = attachedOrigin
+                collapsedWindow?.setFrameOrigin(attachedOrigin)
+                AutoCollapseManager.shared.cancelCollapse()
+            }
         }
     }
 
@@ -199,6 +209,34 @@ final class PanelManager: ObservableObject {
             x: min(max(proposedOrigin.x, screenFrame.minX + 12), screenFrame.maxX - size - 12),
             y: min(max(proposedOrigin.y, screenFrame.minY + 12), screenFrame.maxY - size - 12)
         )
+    }
+
+    private func currentCollapsedFrame() -> NSRect? {
+        if let collapsedWindow {
+            return collapsedWindow.frame
+        }
+
+        guard let origin = lastCollapsedOrigin else { return nil }
+        return NSRect(
+            origin: origin,
+            size: NSSize(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
+        )
+    }
+
+    private func hoverReachDelay() -> TimeInterval {
+        guard let collapsedFrame = currentCollapsedFrame() else {
+            return minimumHoverReachDelay
+        }
+
+        let targetFrame = panel?.frame ?? panelFrame
+        guard targetFrame != .zero else { return minimumHoverReachDelay }
+
+        let horizontalGap = max(0, max(targetFrame.minX - collapsedFrame.maxX, collapsedFrame.minX - targetFrame.maxX))
+        let verticalGap = max(0, max(targetFrame.minY - collapsedFrame.maxY, collapsedFrame.minY - targetFrame.maxY))
+        let distance = hypot(horizontalGap, verticalGap)
+        let adaptiveDelay = minimumHoverReachDelay + TimeInterval(distance / hoverReachPixelsPerSecond)
+
+        return min(maximumHoverReachDelay, adaptiveDelay)
     }
 
     /// Hides the sidebar and shows the collapsed icon instead.
@@ -271,8 +309,9 @@ final class PanelManager: ObservableObject {
                 onHoverEnter: { [weak self] in
                     self?.temporarilyExpand()
                 },
-                onHoverExit: {
-                    AutoCollapseManager.shared.scheduleIconTransitionCollapse()
+                onHoverExit: { [weak self] in
+                    let delay = self?.hoverReachDelay() ?? self?.minimumHoverReachDelay
+                    AutoCollapseManager.shared.scheduleIconTransitionCollapse(after: delay)
                 }
             )
             .environmentObject(TabManager.shared)

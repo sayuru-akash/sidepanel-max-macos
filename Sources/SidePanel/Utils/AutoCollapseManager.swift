@@ -59,8 +59,8 @@ final class AutoCollapseManager: ObservableObject {
     }
 
     /// Small grace period so moving from the icon into the expanded panel does not flicker closed.
-    func scheduleIconTransitionCollapse() {
-        scheduleCollapse(after: iconTransitionDelay)
+    func scheduleIconTransitionCollapse(after delay: TimeInterval? = nil) {
+        scheduleCollapse(after: delay ?? iconTransitionDelay)
     }
 
     /// Keep temporary hover-open behavior responsive even if the general preference is larger.

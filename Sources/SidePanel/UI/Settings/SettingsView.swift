@@ -151,7 +151,7 @@ private struct GeneralSettingsPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard("Startup") {
-                Toggle("Remember last session", isOn: $settings.rememberLastSession)
+                SettingsToggleRow("Remember last session", isOn: $settings.rememberLastSession)
             }
 
             SettingsCard("Browsing") {
@@ -174,6 +174,7 @@ private struct GeneralSettingsPane: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -214,6 +215,7 @@ private struct AppearanceSettingsPane: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -236,6 +238,7 @@ private struct BehaviorSettingsPane: View {
                 Toggle("Show on all spaces", isOn: $settings.showOnAllSpaces)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -268,6 +271,7 @@ private struct PrivacySettingsPane: View {
                 Toggle("Clear history on quit", isOn: $settings.clearHistoryOnQuit)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -306,6 +310,7 @@ private struct ShortcutsSettingsPane: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -354,6 +359,26 @@ private struct SettingsLabeledRow<Content: View>: View {
                 .frame(width: 140, alignment: .leading)
             content
             Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct SettingsToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    init(_ title: String, isOn: Binding<Bool>) {
+        self.title = title
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+            Spacer(minLength: 0)
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
         }
     }
 }
