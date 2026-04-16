@@ -28,14 +28,14 @@ final class AutoCollapseManager: ObservableObject {
 
         let eventMask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
 
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventMask) { [weak self] _ in
-            Task { @MainActor in
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventMask) { _ in
+            Task { @MainActor [weak self] in
                 self?.handleMouseMove()
             }
         }
 
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
-            Task { @MainActor in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { event in
+            Task { @MainActor [weak self] in
                 self?.handleMouseMove()
             }
             return event
@@ -103,8 +103,8 @@ final class AutoCollapseManager: ObservableObject {
 
         cancelCollapse()
         pendingDelay = delay
-        collapseTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            Task { @MainActor in
+        collapseTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
+            Task { @MainActor [weak self] in
                 self?.collapseIfNeeded()
             }
         }

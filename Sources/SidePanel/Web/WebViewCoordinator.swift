@@ -1,4 +1,4 @@
-import WebKit
+@preconcurrency import WebKit
 import Combine
 
 /// Acts as the WKNavigationDelegate and WKUIDelegate for a tab's WKWebView.
