@@ -13,21 +13,23 @@ enum PermissionManager {
 
     /// Shows an explanation alert and opens System Preferences if the user agrees.
     static func requestAccessibilityPermission() {
-        let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = """
-        SidePanel needs Accessibility access to:
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let granted = AXIsProcessTrustedWithOptions(options)
+        guard !granted else { return }
 
-        - Register global keyboard shortcuts
-        - Stay visible across all applications
+        NSApp.activate(ignoringOtherApps: true)
 
-        You can grant this in System Settings > Privacy & Security > Accessibility.
-        """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
+        let response = NSAlert(
+            messageText: "Accessibility Permission Required",
+            informativeText: """
+            SidePanel needs Accessibility access for global keyboard shortcuts.
 
-        let response = alert.runModal()
+            macOS should also show the system permission prompt. If it does not, open:
+            System Settings > Privacy & Security > Accessibility
+            """,
+            buttons: ["Open System Settings", "Later"]
+        ).runModal()
+
         if response == .alertFirstButtonReturn {
             openAccessibilityPreferences()
         }
@@ -39,5 +41,15 @@ enum PermissionManager {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+private extension NSAlert {
+    convenience init(messageText: String, informativeText: String, buttons: [String]) {
+        self.init()
+        self.messageText = messageText
+        self.informativeText = informativeText
+        self.alertStyle = .informational
+        buttons.forEach { addButton(withTitle: $0) }
     }
 }

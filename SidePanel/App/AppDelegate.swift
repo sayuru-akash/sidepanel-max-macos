@@ -4,6 +4,7 @@ import Combine
 
 /// Manages the application lifecycle.
 /// Creates the floating panel on launch and coordinates top-level managers.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Managers

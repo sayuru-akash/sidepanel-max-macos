@@ -12,7 +12,8 @@ let package = Package(
             name: "SidePanel",
             path: "SidePanel",
             exclude: [
-                "App/Info.plist"
+                "App/Info.plist",
+                "SidePanel.entitlements"
             ]
         )
     ]

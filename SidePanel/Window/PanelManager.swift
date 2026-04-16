@@ -61,7 +61,7 @@ final class PanelManager: ObservableObject {
             let floatingPanel = FloatingPanel()
 
             // Restore saved frame if available
-            if let saved = lastPanelFrame {
+            if let saved = validatedPanelFrame(lastPanelFrame) {
                 floatingPanel.setFrame(saved, display: true)
             }
 
@@ -86,10 +86,12 @@ final class PanelManager: ObservableObject {
             observePanelFrame(floatingPanel)
         }
 
-        panel?.makeKeyAndOrderFront(nil)
+        panel?.orderFrontRegardless()
+        panel?.makeKey()
         panelFrame = panel?.frame ?? .zero
         collapsedWindow?.orderOut(nil)
         state = .pinned
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Frame Observation
@@ -106,7 +108,9 @@ final class PanelManager: ObservableObject {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            self?.syncPanelFrame()
+            Task { @MainActor [weak self] in
+                self?.syncPanelFrame()
+            }
         }
 
         let resizeObserver = NotificationCenter.default.addObserver(
@@ -114,7 +118,9 @@ final class PanelManager: ObservableObject {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            self?.syncPanelFrame()
+            Task { @MainActor [weak self] in
+                self?.syncPanelFrame()
+            }
         }
 
         frameObservers = [moveObserver, resizeObserver]
@@ -124,6 +130,20 @@ final class PanelManager: ObservableObject {
         if let frame = panel?.frame {
             panelFrame = frame
         }
+    }
+
+    private func validatedPanelFrame(_ frame: NSRect?) -> NSRect? {
+        guard let frame else { return nil }
+        guard frame.width >= LayoutMetrics.minWidth, frame.height >= LayoutMetrics.minHeight else {
+            return nil
+        }
+
+        let visibleFrame = NSScreen.main?.visibleFrame ?? .zero
+        guard !visibleFrame.isEmpty, frame.intersects(visibleFrame) else {
+            return nil
+        }
+
+        return frame
     }
 
     /// Hides the sidebar and shows the collapsed icon instead.
@@ -190,7 +210,7 @@ final class PanelManager: ObservableObject {
                 onHoverEnter: { [weak self] in
                     self?.temporarilyExpand()
                 },
-                onHoverExit: { [weak self] in
+                onHoverExit: {
                     AutoCollapseManager.shared.scheduleCollapse()
                 }
             )
@@ -203,7 +223,7 @@ final class PanelManager: ObservableObject {
             self.collapsedHostingController = hosting
         }
 
-        collapsedWindow?.makeKeyAndOrderFront(nil)
+        collapsedWindow?.orderFrontRegardless()
     }
 
     // MARK: - Persistence Helpers
@@ -216,10 +236,12 @@ final class PanelManager: ObservableObject {
 
     /// Restores window state from a saved session.
     func restoreWindowState(frame: NSRect, isPinned: Bool) {
-        lastPanelFrame = frame
+        lastPanelFrame = validatedPanelFrame(frame)
         if isPinned {
             showPanel()
-            panel?.setFrame(frame, display: true)
+            if let frame = lastPanelFrame {
+                panel?.setFrame(frame, display: true)
+            }
         } else {
             collapse()
         }
