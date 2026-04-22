@@ -10,32 +10,35 @@ struct CollapsedButtonView: View {
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                Circle()
-                    .fill(Color.collapsedBG)
-                    .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
-
-                // Favicon or default icon
-                if let tab = tabManager.activeTab {
-                    FaviconImage(url: tab.faviconURL ?? tab.googleFaviconURL, size: 28)
-                } else {
-                    Image(systemName: "globe")
-                        .font(.system(size: 24))
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                // Hover ring
-                if isHovering {
+        ZStack {
+            Button(action: onTap) {
+                ZStack {
                     Circle()
-                        .stroke(Color.accentColor, lineWidth: 3)
-                        .transition(.opacity)
+                        .fill(Color.collapsedBG)
+                        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
+
+                    // Favicon or default icon
+                    if let tab = tabManager.activeTab {
+                        FaviconImage(url: tab.faviconURL ?? tab.googleFaviconURL, size: 28)
+                    } else {
+                        Image(systemName: "globe")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.accentColor)
+                    }
+
+                    // Hover ring
+                    if isHovering {
+                        Circle()
+                            .stroke(Color.accentColor, lineWidth: 3)
+                            .transition(.opacity)
+                    }
                 }
             }
+            .buttonStyle(.plain)
+            .frame(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
+            .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .frame(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
-        .contentShape(Circle())
+        .frame(width: LayoutMetrics.collapsedWindowSize, height: LayoutMetrics.collapsedWindowSize)
         .onHover { hovering in
             withAnimation(AnimationConfig.hoverExpand) {
                 isHovering = hovering

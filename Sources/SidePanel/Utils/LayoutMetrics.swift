@@ -12,6 +12,8 @@ enum LayoutMetrics {
     // MARK: - Collapsed State
     static let collapsedSize: CGFloat = 64
     static let collapsedCornerRadius: CGFloat = 32
+    static let collapsedShadowPadding: CGFloat = 12
+    static let collapsedWindowSize: CGFloat = collapsedSize + (collapsedShadowPadding * 2)
 
     // MARK: - Tab Bar
     static let tabBarWidth: CGFloat = 56

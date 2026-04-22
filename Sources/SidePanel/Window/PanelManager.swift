@@ -147,7 +147,7 @@ final class PanelManager: ObservableObject {
             if state == .temporarilyExpanded {
                 let attachedOrigin = collapsedOrigin(for: frame)
                 lastCollapsedOrigin = attachedOrigin
-                collapsedWindow?.setFrameOrigin(attachedOrigin)
+                collapsedWindow?.setVisualOrigin(attachedOrigin)
                 AutoCollapseManager.shared.reevaluateCurrentMouseLocation()
             }
         }
@@ -213,7 +213,10 @@ final class PanelManager: ObservableObject {
 
     private func currentCollapsedFrame() -> NSRect? {
         if let collapsedWindow {
-            return collapsedWindow.frame
+            return NSRect(
+                origin: collapsedWindow.visualOrigin,
+                size: NSSize(width: LayoutMetrics.collapsedSize, height: LayoutMetrics.collapsedSize)
+            )
         }
 
         guard let origin = lastCollapsedOrigin else { return nil }
@@ -338,7 +341,7 @@ final class PanelManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.lastCollapsedOrigin = window.frame.origin
+                self?.lastCollapsedOrigin = (window as? CollapsedButtonWindow)?.visualOrigin ?? window.frame.origin
             }
         }
     }
@@ -488,7 +491,7 @@ final class PanelManager: ObservableObject {
     /// Returns the current window state for session saving.
     func currentWindowState() -> (frame: NSRect, isPinned: Bool, collapsedOrigin: NSPoint?) {
         let frame = panel?.frame ?? lastPanelFrame ?? .zero
-        let collapsedOrigin = collapsedWindow?.frame.origin ?? lastCollapsedOrigin
+        let collapsedOrigin = collapsedWindow?.visualOrigin ?? lastCollapsedOrigin
         return (frame, state == .pinned, collapsedOrigin)
     }
 
