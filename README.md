@@ -1,214 +1,99 @@
 # SidePanel
 
-SidePanel is a native macOS floating browser panel built with SwiftUI, AppKit, and WebKit. It stays above other apps, collapses into a circular hover bubble when unpinned, and keeps browsing tools available without taking over the desktop.
+<p align="center">
+  <img src="Assets/AppIcon/SidePanel-1024.png" alt="SidePanel app icon" width="180" />
+</p>
 
-## Current Features
+SidePanel is a native macOS floating browser panel built with SwiftUI, AppKit, and WebKit. It stays above other apps, supports pinned and hover-expanded modes, restores tabs and navigation state across relaunches, and keeps a compact browser surface available without taking over the desktop.
 
-- Always-on-top floating `NSPanel`
-- Pinned and unpinned modes
-- Collapsed circular icon with hover-to-expand behavior
-- Multi-tab browsing with per-tab session restore
-- Restored back/forward history after relaunch
-- Address bar with history suggestions
-- Browsing history popover in the toolbar
-- Minimal settings window for real app preferences only
-- Adaptive page fitting for narrow responsive sites
-- Global shortcuts through macOS Accessibility permission
-- Accessory-style app behavior with no Dock or Cmd-Tab entry
+Current repository version: `0.1.7`
+
+## Screenshots
+
+### Browsing On The Homepage
+
+![SidePanel showing Google home in the floating panel](docs/screenshots/panel-window-home.png)
+
+### Media And Responsive Site Usage
+
+![SidePanel showing YouTube Music in the floating panel](docs/screenshots/panel-window.png)
+
+### Collapsed Bubble Mode
+
+![SidePanel collapsed floating bubble](docs/screenshots/collapsed-bubble.png)
+
+### Settings Window
+
+![SidePanel settings window](docs/screenshots/settings-window.png)
+
+## What The App Does
+
+- Keeps a floating browser panel visible above other windows with `NSPanel`
+- Supports pinned mode, unpinned mode, and hover-to-expand bubble mode
+- Restores tabs, active tab selection, and per-tab back/forward history
+- Persists browsing history locally and exposes it from the toolbar
+- Uses a minimal settings window for real app preferences only
+- Applies adaptive fitting for narrow responsive pages inside the panel
+- Registers global shortcuts through macOS Accessibility permission
+- Runs as an accessory-style macOS app without a Dock icon or Cmd-Tab entry
 
 ## Requirements
 
 - macOS 14 or later
-- Xcode 15 or later if opening in Xcode
+- Xcode 15 or later if you want to open the package in Xcode
 
-## Versioning (Single Source Of Truth)
+## Quick Start
 
-Release version is controlled by one file:
-
-- `version.txt`
-
-Example:
-
-```text
-0.1.0
-```
-
-To bump version:
-
-```bash
-./scripts/bump_version.sh 0.1.1
-```
-
-Or edit `version.txt` directly.
-
-All packaging and release automation reads from that file.
-
-## Build And Run
-
-### Swift Package Manager
+Build and run directly with Swift Package Manager:
 
 ```bash
 swift build
 ./.build/debug/SidePanel
 ```
 
-This launches a GUI process from the terminal, so the shell stays attached while the app is running. Use `Ctrl+C` in that terminal to stop it.
+This launches a GUI process from your shell, so the terminal stays attached while the app is running. Stop it with `Ctrl+C`.
 
-### Xcode
+If you prefer Xcode:
 
 1. Open `Package.swift` in Xcode.
 2. Select the `SidePanel` executable target.
 3. Build and run.
 
-## Production Build And Packaging
+## Using SidePanel
 
-Build a signed (ad-hoc by default) app bundle and `.pkg` installer:
-
-```bash
-./scripts/check.sh
-```
-
-Artifacts are created in `dist/`:
-
-- `dist/SidePanel.app`
-- `dist/SidePanel-<version>.pkg`
-
-To only build the app bundle:
-
-```bash
-./scripts/build_app_bundle.sh
-```
-
-To only build the installer package from an already built app bundle:
-
-```bash
-./scripts/build_pkg.sh --skip-app-build
-```
-
-For Developer ID signing and notarization, provide these environment variables:
-
-- `CODESIGN_IDENTITY`
-- `PKG_SIGN_IDENTITY`
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-
-Notarize a generated package manually:
-
-```bash
-./scripts/notarize_pkg.sh dist/SidePanel-$(cat version.txt).pkg
-```
-
-## App Icon
-
-A custom purple-focused icon can be generated and regenerated with:
-
-```bash
-./scripts/generate_icon.sh
-```
-
-It outputs:
-
-- `Assets/AppIcon/SidePanel-1024.png`
-- `Assets/AppIcon/SidePanel.icns`
-
-The installer build embeds this `.icns` file into `SidePanel.app`.
-
-## Pre-Commit Quality Gate
-
-Enable repository-managed git hooks:
-
-```bash
-./scripts/setup-git-hooks.sh
-```
-
-This wires `.githooks/pre-commit` so every commit runs:
-
-- unit tests
-- release build
-- app bundle build
-- `.pkg` build
-
-If any step fails, the commit is blocked.
-
-## GitHub Actions (CI + Auto Release)
-
-### CI
-
-- Workflow: `.github/workflows/ci.yml`
-- Runs on push and pull request
-- Executes `./scripts/check.sh`
-
-### Auto Release
-
-- Workflow: `.github/workflows/release.yml`
-- Runs on pushes to `main`/`master` and on manual dispatch
-- If `version.txt` changed and tag does not already exist:
-  - runs production checks
-  - builds `.app` and `.pkg`
-  - optionally notarizes package if Apple credentials are configured
-  - creates and pushes tag `v<version>`
-  - publishes GitHub Release with artifacts and SHA256 checksums
-
-Required repository secrets for signed/notarized releases:
-
-- `APPLE_CERTIFICATE_BASE64`
-- `APPLE_CERTIFICATE_PASSWORD`
-- `CODESIGN_IDENTITY`
-- `PKG_SIGN_IDENTITY`
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-
-If signing secrets are omitted, the workflow still builds and publishes unsigned artifacts.
-
-## Testing
-
-```bash
-swift test
-```
-
-The current package includes unit tests for homepage normalization logic.
-
-## First Launch
-
-SidePanel uses Accessibility permission for system-wide shortcuts.
+### Core Flow
 
 1. Launch the app.
-2. If macOS shows the Accessibility prompt, approve it.
-3. If it does not, open `System Settings > Privacy & Security > Accessibility`.
-4. Enable `SidePanel`.
-5. Relaunch the app if macOS requires it.
+2. Browse in the floating panel as usual.
+3. Use the pin control to keep the panel fixed open or collapse it into the circular bubble.
+4. Hover the bubble to temporarily expand the panel.
+5. Move away from the temporary panel to let it collapse again.
 
-## Keyboard Shortcuts
+### Toolbar
 
-| Shortcut      | Action            |
-| ------------- | ----------------- |
-| `Cmd+Shift+S` | Toggle sidebar    |
-| `Cmd+Shift+N` | New tab           |
-| `Cmd+Shift+W` | Close current tab |
-| `Cmd+Shift+[` | Previous tab      |
-| `Cmd+Shift+]` | Next tab          |
-| `Cmd+Shift+L` | Focus address bar |
-
-## Toolbar
-
-The toolbar currently provides:
+The toolbar includes:
 
 - Back
 - Forward
-- Pin / unpin
+- Pin or unpin
 - History popover
 - Settings
 
-## Settings
+### Tabs
 
-The settings window is intentionally minimal and only includes active preferences:
+- Add tabs from the `+` button in the tab rail
+- Switch between tabs from the left sidebar
+- Close the current tab with the global shortcut
+- Restored tabs reopen with their saved navigation history
+
+### Settings
+
+The current settings window is intentionally minimal. It contains:
 
 - `General`
+  - Remember last session
   - Homepage
   - Default search engine
-  - Remember last session
 - `Appearance`
   - Theme
   - Sidebar width
@@ -220,23 +105,166 @@ The settings window is intentionally minimal and only includes active preference
   - Clear browsing history now
   - Clear history on quit
 - `Shortcuts`
-  - Shortcut reference
-  - Open Accessibility settings
+  - Shortcut list
+  - Accessibility settings shortcut
 
 Browsing history is not a settings tab. It is available from the toolbar history button.
 
-## Interaction Notes
+## Keyboard Shortcuts
 
-- Drag the panel background to move it.
-- Resize the panel from its edges.
-- Unpin to collapse the app into the circular floating icon.
-- Hover the icon to temporarily expand the panel.
-- Move out of the temporary panel to collapse it again.
-- Use the toolbar history button to reopen previously visited pages.
+| Shortcut | Action |
+| --- | --- |
+| `Cmd+Shift+S` | Toggle sidebar |
+| `Cmd+Shift+N` | New tab |
+| `Cmd+Shift+W` | Close current tab |
+| `Cmd+Shift+[` | Previous tab |
+| `Cmd+Shift+]` | Next tab |
+| `Cmd+Shift+L` | Focus address bar |
 
-## Architecture
+## Permissions
 
-The current codebase is organized like this:
+SidePanel uses Accessibility access for its global shortcuts.
+
+On first launch:
+
+1. Run the app.
+2. Approve the macOS Accessibility prompt if it appears.
+3. If the prompt does not appear, open `System Settings > Privacy & Security > Accessibility`.
+4. Enable `SidePanel`.
+5. Relaunch the app if macOS asks for it.
+
+## Build, Test, And Package
+
+### Run Unit Tests
+
+```bash
+swift test
+```
+
+### Create A Release Build
+
+```bash
+swift build -c release --product SidePanel
+```
+
+### Build The `.app` Bundle
+
+```bash
+./scripts/build_app_bundle.sh
+```
+
+This creates:
+
+- `dist/SidePanel.app`
+
+### Build The Installer Package
+
+```bash
+./scripts/build_pkg.sh
+```
+
+This creates:
+
+- `dist/SidePanel-<version>.pkg`
+
+### Run The Full Local Release Gate
+
+```bash
+./scripts/check.sh
+```
+
+This script currently runs:
+
+1. version metadata sync
+2. `swift test`
+3. release build
+4. app bundle build
+5. installer package build
+
+## Versioning
+
+`version.txt` is the single source of truth for the app version.
+
+To bump the version:
+
+```bash
+./scripts/bump_version.sh 0.1.8
+```
+
+That updates:
+
+- `version.txt`
+- `Sources/SidePanel/App/Info.plist`
+
+The current settings window also shows the runtime version and build type.
+
+## Signing And Notarization
+
+Local builds use ad-hoc signing by default.
+
+For Developer ID signing and notarization, provide the following environment variables:
+
+- `CODESIGN_IDENTITY`
+- `PKG_SIGN_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+Manual notarization command:
+
+```bash
+./scripts/notarize_pkg.sh dist/SidePanel-$(cat version.txt).pkg
+```
+
+## Git Hooks
+
+To enable the repository-managed pre-commit hook:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+That wires `.githooks/pre-commit` so commits run the repo quality gate before they land.
+
+## GitHub Actions
+
+### CI
+
+Workflow: `.github/workflows/ci.yml`
+
+- runs on pushes to `main` and `master`
+- runs on pull requests
+- executes `./scripts/check.sh`
+- uploads `dist/*` as an artifact when available
+
+### Release Automation
+
+Workflow: `.github/workflows/release.yml`
+
+- runs on pushes to `main` and `master`
+- also supports manual dispatch
+- only creates a release automatically when `version.txt` changed on that push, or when manually dispatched
+- skips release creation if the corresponding tag already exists
+
+When a release is created, the workflow:
+
+1. runs `./scripts/check.sh`
+2. zips `dist/SidePanel.app`
+3. optionally notarizes the installer if Apple credentials are configured
+4. creates SHA256 checksums
+5. tags the repo as `v<version>`
+6. publishes a GitHub release with the `.pkg`, `.zip`, and checksum file
+
+## Data Storage
+
+The app currently stores data locally:
+
+- open tabs in SwiftData
+- session and window state in app preferences
+- browsing history in app preferences
+- user settings in `UserDefaults`
+
+## Project Layout
 
 ```text
 Sources/
@@ -254,25 +282,13 @@ Sources/
 
 Tests/
   SidePanelTests/
+
+Assets/
+  AppIcon/
+
+docs/
+  screenshots/
 ```
-
-Main pieces:
-
-- `Sources/SidePanel/App/` app lifecycle and startup coordination
-- `Sources/SidePanel/Window/` floating panel and collapsed bubble window management
-- `Sources/SidePanel/Tabs/` tab state, restored navigation history, and tab-level navigation
-- `Sources/SidePanel/Web/` `WKWebView` integration and adaptive page fitting
-- `Sources/SidePanel/Data/` settings, session persistence, and browsing history persistence
-- `Sources/SidePanel/UI/` SwiftUI views for toolbar, tabs, settings, address bar, and history
-- `Tests/SidePanelTests/` unit tests for pure logic
-
-## Notes
-
-- The app stores window/session snapshots locally in app preferences.
-- Open tabs are persisted in SwiftData.
-- Browsing history is stored locally in app preferences.
-- The homepage defaults to Google and can be changed in Settings.
-- Browsing history can be cleared immediately from Settings or automatically on quit.
 
 ## License
 
