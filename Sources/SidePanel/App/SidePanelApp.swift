@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 /// Main entry point for SidePanel.
 /// Uses LSUIElement = true (set in Info.plist) so the app
@@ -14,18 +13,11 @@ struct SidePanelApp: App {
         }
     }
 
-    /// Wire the SwiftData ModelContainer so Tab objects are managed
-    /// by a real ModelContext and auto-save actually persists data.
-    var sharedModelContainer: ModelContainer {
-        PersistenceController.shared.container
-    }
-
     var body: some Scene {
-        // Settings window – opened via the menu bar or gear button
-        Settings {
-            SettingsView()
-                .environmentObject(SettingsManager.shared)
+        // Keep an inert hidden scene so App runtime stays alive without opening
+        // a SwiftUI Settings scene automatically on launch.
+        MenuBarExtra("SidePanel", systemImage: "sidebar.right", isInserted: .constant(false)) {
+            EmptyView()
         }
-        .modelContainer(sharedModelContainer)
     }
 }
